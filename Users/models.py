@@ -4,6 +4,7 @@ from Goods.models import Product
 
 
 class Buyer(User):
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
     pass
 
 
