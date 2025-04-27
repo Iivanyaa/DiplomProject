@@ -1,8 +1,8 @@
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import BuyerRegSerializer, DeleteUserDataSerializer, LoginSerializer, ChangePasswordSerializer
-from .models import Buyer
+from .serializers import UserRegSerializer, DeleteUserDataSerializer, GetUserDataSerializer, LoginSerializer, ChangePasswordSerializer
+from .models import MarketUser
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password, check_password
 
@@ -11,7 +11,7 @@ from django.contrib.auth.hashers import make_password, check_password
 class BuyerRegisterView(APIView):
     def post(self, request):
         # Создаем объект serializer, передаем ему данные из запроса
-        serializer = BuyerRegSerializer(data=request.data)
+        serializer = UserRegSerializer(data=request.data)
         # Проверяем, валидны ли данные
         if serializer.is_valid():
             # Если данные валидны, сохраняем их
@@ -58,7 +58,7 @@ class ChangePasswordView(APIView):
         if not user_id:
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
         # Получаем объект пользователя по ID
-        user = Buyer.objects.get(id=user_id)
+        user = MarketUser.objects.get(id=user_id)
         # Создаем объект serializer, передаем ему данные из запроса
         serializer = ChangePasswordSerializer(data=request.data)
         # Проверяем, валидны ли данные
@@ -87,7 +87,7 @@ class DeleteUserView(APIView):
             # Если пользователь не аутентифицирован, возвращаем ошибку
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
         # Удаляем пользователя
-        Buyer.objects.filter(id=user_id).delete()
+        MarketUser.objects.filter(id=user_id).delete()
         # Возвращаем ответ, что пользователь успешно удален
         return Response({'message': 'Пользователь успешно удален'}, status=status.HTTP_200_OK)
 
@@ -101,9 +101,9 @@ class UpdateUserView(APIView):
             # Если пользователь не аутентифицирован, возвращаем ошибку
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
         # Получаем объект пользователя по ID
-        user = Buyer.objects.get(id=user_id)
+        user = MarketUser.objects.get(id=user_id)
         # Создаем объект serializer, передаем ему данные из запроса и объект пользователя
-        serializer = BuyerRegSerializer(user, data=request.data, partial=True)
+        serializer = UserRegSerializer(user, data=request.data, partial=True)
         # Проверяем, валидны ли данные
         if serializer.is_valid(raise_exception=True):
             # Если данные валидны, сохраняем их
@@ -123,7 +123,7 @@ class DeleteUserDataView(APIView):
             # Если пользователь не аутентифицирован, возвращаем ошибку
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
         # Получаем объект пользователя по ID
-        user = Buyer.objects.get(id=user_id)
+        user = MarketUser.objects.get(id=user_id)
 
         serializer = DeleteUserDataSerializer(data=request.data)
         # удаляем выбранные параметры пользователя в соответствии с данными сериализатора
@@ -140,4 +140,33 @@ class DeleteUserDataView(APIView):
             return Response({'message': 'Данные пользователя успешно удалены'}, status=status.HTTP_200_OK)
         # Если данные не валидны, возвращаем ошибки
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+# получение данных пользователя по ID
+class GetUserDataView(APIView):
+    def get(self, request):
+        # Получаем ID текущего пользователя из сессии
+        current_user_id = request.session.get('user_id')
+        if not current_user_id:
+            # Если пользователь не аутентифицирован, возвращаем ошибку
+            return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
+        # Создаем объект сериализатора, передаем ему данные из запроса
+        serializer = GetUserDataSerializer(data=request.data)
+        # Проверяем, валидны ли данные
+        if serializer.is_valid(raise_exception=True):
+            # Получаем объект пользователя по ID, указанному в сериализаторе
+            user = MarketUser.objects.get(id=serializer.validated_data['user_id'])
+            # Возвращаем данные пользователя
+            return Response({
+                'message': 'Данные пользователя успешно получены',
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'phone_number': user.phone_number,
+                'email': user.email,
+                'username': user.username
+            }, status=status.HTTP_200_OK)
+        # Если данные не валидны, возвращаем ошибку
+        return Response({'message': 'Данные невалидны'}, status=status.HTTP_400_BAD_REQUEST)
+
+
         

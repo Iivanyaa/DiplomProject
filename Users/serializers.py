@@ -1,12 +1,12 @@
 from rest_framework import serializers
-from .models import User, Buyer
+from .models import MarketUser
 from django.contrib.auth.hashers import make_password
 
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
-        fields = [                                                           'username', 'password', 'email']
+        model = MarketUser
+        fields = ['username', 'password', 'email']
 
     def create(self, validated_data):
         validated_data['password'] = make_password(validated_data['password'])
@@ -17,9 +17,9 @@ class UserSerializer(serializers.ModelSerializer):
             validated_data['password'] = make_password(validated_data['password'])
         return super().update(instance, validated_data)
 
-class BuyerRegSerializer(UserSerializer):
+class UserRegSerializer(UserSerializer):
     class Meta:
-        model = Buyer
+        model = MarketUser
         fields = ['email', 'password', 'username', 'first_name', 'last_name', 'phone_number']
 
 
@@ -57,6 +57,18 @@ class DeleteUserSerializer(serializers.Serializer):
         if not User.objects.filter(id=attrs['user_id']).exists():
             raise serializers.ValidationError("Пользователь не существует.")  # Выбрасываем ошибку, если пользователь не найден
         return attrs
+    
+
+# Сериализатор для получения данных пользователя по ID
+class GetUserDataSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField(required=True)  # Идентификатор пользователя (обязательное поле)
+
+    def validate(self, attrs):
+        # Проверяем, существует ли пользователь с данным идентификатором
+        if not MarketUser.objects.filter(id=attrs['user_id']).exists():
+            raise serializers.ValidationError("Пользователь не существует.")  # Выбрасываем ошибку, если пользователь не найден
+        return attrs
+
     
 
 class DeleteUserDataSerializer(serializers.Serializer):

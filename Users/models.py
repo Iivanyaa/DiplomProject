@@ -3,9 +3,30 @@ from django.contrib.auth.models import Group, Permission, AnonymousUser, User
 from Goods.models import Product
 
 
-class Buyer(User):
+class MarketUser(User):
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     pass
+
+# создаем моедль группы покупателей
+class BuyerGroup(Group):
+    class Meta:
+        verbose_name = 'Покупатель'
+        verbose_name_plural = 'Покупатели'
+
+# создаем модель группы продавцов
+class SellerGroup(Group):
+    class Meta:
+        verbose_name = 'Продавец'
+        verbose_name_plural = 'Продавцы'
+
+# создаем модель группы администраторов
+class AdminGroup(Group):
+    class Meta:
+        verbose_name = 'Администратор'
+        verbose_name_plural = 'Администраторы'
+
+
+
 
 
 
