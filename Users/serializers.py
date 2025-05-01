@@ -20,7 +20,7 @@ class UserSerializer(serializers.ModelSerializer):
 class UserRegSerializer(UserSerializer):
     class Meta:
         model = MarketUser
-        fields = ['email', 'password', 'username', 'first_name', 'last_name', 'phone_number']
+        fields = ['user_type', 'email', 'password', 'username', 'first_name', 'last_name', 'phone_number']
 
 
 class LoginSerializer(serializers.Serializer):
@@ -54,7 +54,7 @@ class DeleteUserSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         # Проверяем, существует ли пользователь с данным идентификатором
-        if not User.objects.filter(id=attrs['user_id']).exists():
+        if not MarketUser.objects.filter(id=attrs['user_id']).exists():
             raise serializers.ValidationError("Пользователь не существует.")  # Выбрасываем ошибку, если пользователь не найден
         return attrs
     

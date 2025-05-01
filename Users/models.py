@@ -1,29 +1,35 @@
 from django.db import models
-from django.contrib.auth.models import Group, Permission, AnonymousUser, User
-from Goods.models import Product
+from django.contrib.auth.models import Group, AnonymousUser, User
 
 
 class MarketUser(User):
+    # поле для номера телефона
     phone_number = models.CharField(max_length=20, blank=True, null=True)
-    pass
+        # это поле будет хранить номер телефона пользователя
+    # тип пользователя (Buyer, Seller, Admin)
+    USER_TYPES = (
+        ('Seller', 'Продавец'),  # тип Seller - продавец
+        ('Buyer', 'Покупатель'),  # тип Buyer - покупатель
+        ('Admin', 'Администратор'),  # тип Admin - администратор
+    )
+    user_type = models.CharField(
+        max_length=255,  # длинна строки 255 символов
+        blank=True,  # поле может быть пустым
+        null=True,  # поле может быть Null
+        choices=USER_TYPES,  # типы пользователей
+        default='Buyer'  # по умолчанию - покупатель
+    )
 
 # создаем моедль группы покупателей
-class BuyerGroup(Group):
+class UserGroup(Group):
     class Meta:
-        verbose_name = 'Покупатель'
-        verbose_name_plural = 'Покупатели'
+        verbose_name = 'Группа'
+        verbose_name_plural = 'Группы'
 
-# создаем модель группы продавцов
-class SellerGroup(Group):
-    class Meta:
-        verbose_name = 'Продавец'
-        verbose_name_plural = 'Продавцы'
 
-# создаем модель группы администраторов
-class AdminGroup(Group):
-    class Meta:
-        verbose_name = 'Администратор'
-        verbose_name_plural = 'Администраторы'
+# Создаем группы пользователей по умолчанию
+
+
 
 
 

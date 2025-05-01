@@ -2,23 +2,30 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .serializers import UserRegSerializer, DeleteUserDataSerializer, GetUserDataSerializer, LoginSerializer, ChangePasswordSerializer
-from .models import MarketUser
+from .models import MarketUser, UserGroup
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password, check_password
-
+from django.contrib.auth.decorators import permission_required
+from django.contrib.auth.mixins import PermissionRequiredMixin
 
 # Регистрация покупателя по логину, почте и паролю
-class BuyerRegisterView(APIView):
+class UserRegisterView(APIView):
+    """
+    POST: Регистрация пользователя
+    """
     def post(self, request):
         # Создаем объект serializer, передаем ему данные из запроса
         serializer = UserRegSerializer(data=request.data)
         # Проверяем, валидны ли данные
         if serializer.is_valid():
-            # Если данные валидны, сохраняем их
-            serializer.save()
-            # Возвращаем данные и статус 201 CREATED
+            # если данные валидны, то создаем пользователя
+            user = serializer.save()
+            # Добавляем пользователя в группу, которая соответствует типу пользователя
+            user_type = serializer.validated_data.get('user_type', 'Buyer')
+            UserGroup.objects.get(name=user_type).user_set.add(user)
+            # возвращаем ответ
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        # Если данные не валидны, возвращаем ошибки и статус 400 BAD REQUEST
+        # если данные не валидны, то возвращаем ошибки
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -80,7 +87,9 @@ class ChangePasswordView(APIView):
 
 # Удаление пользователя
 class DeleteUserView(APIView):
+    @permission_required('delete_user', raise_exception=True)    
     def delete(self, request):
+       
         # ID текущего пользователя
         user_id = request.session.get('user_id')
         if not user_id:
