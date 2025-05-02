@@ -1,0 +1,101 @@
+from django.db import models
+from Users.models import MarketUser
+
+
+# модель продукта
+class Product(models.Model):
+    """
+    Модель продукта. 
+    Поле name - название продукта
+    Поле price - цена продукта
+    Поле description - описание продукта
+    Поле quantity - количество продукта
+    Поле is_available - доступен ли продукт
+    Поле created_at - дата создания
+    Поле updated_at - дата обновления
+    Поле parameters - параметры продукта
+    """
+    name = models.CharField(max_length=255)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.TextField()
+    quantity = models.PositiveIntegerField()
+    is_available = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    parameters = models.ForeignKey('Parameters', on_delete=models.SET_NULL, null=True, related_name='products')
+
+    def __str__(self):
+        """
+        текстовое представление продукта
+        """
+        return self.name
+    
+
+# модель параметра продукта
+class Parameters(models.Model):
+    """
+    Модель параметра продукта. 
+    Поле name - название параметра
+    Поле value - значение параметра
+    Поле products - продукты, у которых есть данный параметр
+    """
+    name = models.CharField(max_length=255)
+    value = models.CharField(max_length=255)
+    products = models.ManyToManyField(Product, related_name='parameters', blank=True)
+
+    def __str__(self):
+        """
+        текстовое представление параметра
+        """
+        return self.name    
+
+
+# модель корзины
+class Cart(models.Model):
+    """
+    Модель корзины. 
+    Поле user - пользователь, которому принадлежит корзина
+    Поле products - продукты в корзине
+    Поле created_at - дата создания
+    Поле updated_at - дата обновления
+    """
+    user = models.ForeignKey('Users.MarketUser', on_delete=models.SET_NULL, null=True, related_name='carts')
+    products = models.ManyToManyField(Product, related_name='carts', through='CartProduct')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+# модель продукта в корзине
+class CartProduct(models.Model):
+    """
+    Модель продукта в корзине. 
+    Поле cart - корзина, в которой находится продукт
+    Поле product - продукт в корзине
+    Поле quantity - количество продукта в корзине
+    Поле created_at - дата создания
+    Поле updated_at - дата обновления
+    """
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='cart_products')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='cart_products')
+    quantity = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+# модель категории продуктов
+class Category(models.Model):
+    """
+    Модель категории продуктов. 
+    Поле name - название категории
+    Поле products - продукты в категории
+    """
+    name = models.CharField(max_length=255)
+    products = models.ManyToManyField(Product, related_name='categories', blank=True)
+
+    def __str__(self):
+        """
+        текстовое представление категории
+        """
+        return self.name
+    
+
