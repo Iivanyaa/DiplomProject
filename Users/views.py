@@ -1,12 +1,14 @@
+import os
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import UserRegSerializer, DeleteUserDataSerializer, GetUserDataSerializer, LoginSerializer, ChangePasswordSerializer
+from .serializers import RestorePasswordSerializer, UserRegSerializer, DeleteUserDataSerializer, GetUserDataSerializer, LoginSerializer, ChangePasswordSerializer
 from .models import MarketUser, UserGroup
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password, check_password
-from django.contrib.auth.decorators import permission_required
-from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.core.mail import send_mail
+from .utils import generate_secure_password
+
 
 # Регистрация покупателя по логину, почте и паролю
 class UserRegisterView(APIView):
@@ -40,13 +42,13 @@ class LoginView(APIView):
             user = authenticate(**serializer.validated_data)
             # если аутентификация прошла успешно
             if user:
-                # сохраняем пользователя в сессии
+                # сохраняем все данные пользователя в сессии
                 request.session['user_id'] = user.id
+                request.session['username'] = user.username
                 # возвращаем ответ, что аутентификация прошла успешно
-                return Response({'message': 'Успешная аутентификация'}, status=status.HTTP_200_OK)               
+                return Response({'message': 'Успешная аутентификация'}, status=status.HTTP_200_OK)
         # если аутентификация прошла неудачно
         return Response({'message': 'неверные данные'}, status=status.HTTP_400_BAD_REQUEST)
-
 
 # выход пользователя из системы
 class LogoutView(APIView):
@@ -66,6 +68,9 @@ class ChangePasswordView(APIView):
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
         # Получаем объект пользователя по ID
         user = MarketUser.objects.get(id=user_id)
+        # Проверяем, имеет ли пользователь право на изменение пароля
+        if not user.has_perm('Users.change_password'):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
         # Создаем объект serializer, передаем ему данные из запроса
         serializer = ChangePasswordSerializer(data=request.data)
         # Проверяем, валидны ли данные
@@ -87,18 +92,21 @@ class ChangePasswordView(APIView):
 
 # Удаление пользователя
 class DeleteUserView(APIView):
-    @permission_required('delete_user', raise_exception=True)    
     def delete(self, request):
-       
-        # ID текущего пользователя
         user_id = request.session.get('user_id')
         if not user_id:
             # Если пользователь не аутентифицирован, возвращаем ошибку
-            return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED, content_type='application/json')
+        try:
+            user = MarketUser.objects.get(id=user_id)
+        except MarketUser.DoesNotExist:
+            return Response({'message': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND, content_type='application/json')
+        if not user.has_perm("Users.delete_user"):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN, content_type='application/json')
         # Удаляем пользователя
-        MarketUser.objects.filter(id=user_id).delete()
+        user.delete()
         # Возвращаем ответ, что пользователь успешно удален
-        return Response({'message': 'Пользователь успешно удален'}, status=status.HTTP_200_OK)
+        return Response({'message': 'Пользователь успешно удален'}, status=status.HTTP_200_OK, content_type='application/json')
 
 
 # Изменение данных пользователя
@@ -110,8 +118,13 @@ class UpdateUserView(APIView):
             # Если пользователь не аутентифицирован, возвращаем ошибку
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
         # Получаем объект пользователя по ID
-        user = MarketUser.objects.get(id=user_id)
+        try:
+            user = MarketUser.objects.get(id=user_id)
+        except:
+            return Response({'message': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)    
         # Создаем объект serializer, передаем ему данные из запроса и объект пользователя
+        if not user.has_perm("Users.update_user"):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN, content_type='application/json')
         serializer = UserRegSerializer(user, data=request.data, partial=True)
         # Проверяем, валидны ли данные
         if serializer.is_valid(raise_exception=True):
@@ -133,7 +146,10 @@ class DeleteUserDataView(APIView):
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
         # Получаем объект пользователя по ID
         user = MarketUser.objects.get(id=user_id)
-
+        # Проверяем, имеет ли пользователь право на удаление данных
+        if not user.has_perm("Users.delete_user_data"):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN, content_type='application/json')
+        # Создаем объект serializer, передаем ему данные из запроса
         serializer = DeleteUserDataSerializer(data=request.data)
         # удаляем выбранные параметры пользователя в соответствии с данными сериализатора
         if serializer.is_valid(raise_exception=True):
@@ -155,10 +171,14 @@ class DeleteUserDataView(APIView):
 class GetUserDataView(APIView):
     def get(self, request):
         # Получаем ID текущего пользователя из сессии
-        current_user_id = request.session.get('user_id')
-        if not current_user_id:
+        user_id = request.session.get('user_id')
+        if not user_id:
             # Если пользователь не аутентифицирован, возвращаем ошибку
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
+        # Проверяем, имеет ли пользователь право на получение данных
+        user = MarketUser.objects.get(id=user_id)
+        if not user.has_perm("Users.get_user_data"):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN, content_type='application/json')
         # Создаем объект сериализатора, передаем ему данные из запроса
         serializer = GetUserDataSerializer(data=request.data)
         # Проверяем, валидны ли данные
@@ -178,4 +198,31 @@ class GetUserDataView(APIView):
         return Response({'message': 'Данные невалидны'}, status=status.HTTP_400_BAD_REQUEST)
 
 
-        
+# восстановление пароля по электроронному адресу
+class RestorePasswordView(APIView):
+    def post(self, request):
+        # Создаем объект сериализатора, передаем ему данные из запроса
+        serializer = RestorePasswordSerializer(data=request.data)
+        # Проверяем, валидны ли данные
+        if serializer.is_valid(raise_exception=True):
+            # Получаем объект пользователя по электронному адресу
+            try:
+                user = MarketUser.objects.get(email=serializer.validated_data['email'])
+            except MarketUser.DoesNotExist:
+                return Response({'message': 'Пользователь с таким электронным адресом не найден'}, status=status.HTTP_404_NOT_FOUND)
+            #Генерируем новый пароль
+            new_password = generate_secure_password()
+            # Обновляем пароль пользователя
+            user.password = make_password(new_password)
+            user.save()
+            # Отправляем письмо с новым паролем
+            send_mail(
+                subject='Восстановление пароля',
+                from_email=os.getenv('EMAIL_HOST_USER'),
+                message=f'Ваш новый пароль: {new_password}',
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+            # Возвращаем ответ, что пароль успешно изменен
+            return Response({'message': 'Пароль успешно изменен'}, status=status.HTTP_200_OK)
+

@@ -1,5 +1,5 @@
 from django.db import models
-from django.contrib.auth.models import Group, AnonymousUser, User
+from django.contrib.auth.models import Group, User
 
 
 class MarketUser(User):

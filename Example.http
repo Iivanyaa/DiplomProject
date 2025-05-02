@@ -3,10 +3,10 @@ POST http://127.0.0.1:8000/api/BuyerRegister/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "email": "Patrick@example.com",
+  "email": "Kozmaivan2013@gmail.com",
   "password": "11111",
-  "username": "БляпнИд",
-  "user_type": "Seller"
+  "username": "BabbleTea",
+  "user_type": "Admin"
 }
 
 ###логин
@@ -15,8 +15,8 @@ POST http://127.0.0.1:8000/api/login/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "username": "БляпнИд",
-  "password": "11111"
+  "username": "BabbleTea",
+  "password": "W9ObWVIWo%kB"
 }
 
 ###смена пароля
@@ -49,9 +49,9 @@ PUT http://127.0.0.1:8000/api/update_user/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "first_name": "Milborn",
-  "last_name": "Baby",
-  "phone_number": "+7(923)803-03-25"
+  "first_name": "Halloa",
+  "last_name": "Allohao",
+  "phone_number": "+7(923)803-02-25"
 }
 
 ###удаление данных пользователя
@@ -71,4 +71,13 @@ Content-Type: application/json
 
 {
   "user_id": 4
+}
+
+###восстановление пароля через электронную почту
+
+POST http://127.0.0.1:8000/api/restore_password/ HTTP/1.1
+Content-Type: application/json
+
+{
+  "email": "Kozmaivan2013@gmail.com"  
 }

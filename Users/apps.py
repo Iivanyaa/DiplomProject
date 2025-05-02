@@ -16,32 +16,67 @@ class UsersConfig(AppConfig):
         seller_group, created = UserGroup.objects.get_or_create(name='Seller')  # продавец
         buyer_group, created = UserGroup.objects.get_or_create(name='Buyer')  # покупатель
 
+        admin_group.permissions.clear()
+        seller_group.permissions.clear()
+        buyer_group.permissions.clear()
+
         # создаем права
         # права администратора
-        admin_permissions = ['add_user', 'change_user', 'delete_user', 'view_user'],
+        admin_permissions = ['add_user', 'change_user', 'delete_user',
+                             'view_user', 'update_user', 'delete_user_data',
+                             'get_user_data', 'change_password'
+                             ]
         # права продавца
-        seller_permissions = ['add_good', 'change_good', 'delete_good', 'view_good'],
+        seller_permissions = ['add_good', 'change_good', 'delete_good',
+                              'delete_user', 'view_good', 'update_user',
+                              'delete_user_data', 'get_user_data', 'change_password'
+                              ]
         # права покупателя  
         buyer_permissions = [
-            'view_good', 'buy_good', 'view_order',
-            'buy_order', 'view_cart', 'buy_cart',
-            'view_payment', 'buy_payment', 'view_delivery',
-            'buy_delivery', 'view_review', 'buy_review'
-            ]
+                             'view_good', 'buy_good', 'view_order',
+                             'buy_order', 'view_cart', 'buy_cart',
+                             'view_payment', 'buy_payment', 'view_delivery',
+                             'buy_delivery', 'view_review', 'buy_review',
+                             'delete_user', 'update_user', 'delete_user_data',
+                             'get_user_data', 'change_password'
+                             ]
         
         content_type = ContentType.objects.get_for_model(UserGroup)
 
         # добавляем права созданным группам
+        # для администратора
         for permission in admin_permissions:
-            permission_obj, created = Permission.objects.get_or_create(codename=permission, name=permission, content_type=content_type)
-            admin_group.permissions.add(permission_obj)
-        
-        for permission in seller_permissions:
-            permission_obj, created = Permission.objects.get_or_create(codename=permission, name=permission, content_type=content_type)
-            seller_group.permissions.add(permission_obj)
-        
-        for permission in buyer_permissions:
-            permission_obj, created = Permission.objects.get_or_create(codename=permission, name=permission, content_type=content_type)
-            buyer_group.permissions.add(permission_obj)
+            # создаем право, если его не существует
+            permission_obj, created = Permission.objects.get_or_create(
+                codename=permission,  # кодовое имя права
+                name=permission,  # имя права
+                content_type=content_type  # тип модели, к которой относится право
+            )
+            # добавляем право в список прав группы, если его там нет
+            if permission_obj not in admin_group.permissions.all():
+                admin_group.permissions.add(permission_obj)
 
+        # для продавца
+        for permission in seller_permissions:
+            # создаем право, если его не существует
+            permission_obj, created = Permission.objects.get_or_create(
+                codename=permission,  # кодовое имя права
+                name=permission,  # имя права
+                content_type=content_type  # тип модели, к которой относится право
+            )
+            # добавляем право в список прав группы, если его там нет
+            if permission_obj not in seller_group.permissions.all():
+                seller_group.permissions.add(permission_obj)
+
+        # для покупателя
+        for permission in buyer_permissions:
+            # создаем право, если его не существует
+            permission_obj, created = Permission.objects.get_or_create(
+                codename=permission,  # кодовое имя права
+                name=permission,  # имя права
+                content_type=content_type  # тип модели, к которой относится право
+            )
+            # добавляем право в список прав группы, если его там нет
+            if permission_obj not in buyer_group.permissions.all():
+                buyer_group.permissions.add(permission_obj)
 

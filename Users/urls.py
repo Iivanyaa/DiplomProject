@@ -10,5 +10,6 @@ urlpatterns = [
     path('delete_user/', views.DeleteUserView.as_view(), name='delete_user'),  
     path('update_user/', views.UpdateUserView.as_view(), name='update_user'),
     path('delete_user_data/', views.DeleteUserDataView.as_view(), name='delete_user_data'),
-    path('Users/', views.GetUserDataView.as_view(), name='Get_User'), 
+    path('Users/', views.GetUserDataView.as_view(), name='Get_User'),
+    path('restore_password/', views.RestorePasswordView.as_view(), name='restore_password') 
 ] 

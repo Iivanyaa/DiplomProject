@@ -73,7 +73,16 @@ class GetUserDataSerializer(serializers.Serializer):
 
 class DeleteUserDataSerializer(serializers.Serializer):
     data_to_delete = serializers.ListField(child=serializers.CharField(), required=True)  # Список данных для удаления
-   
+
+# Сериализатор для восстановления пароля
+class RestorePasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+    def validate(self, attrs):
+        # Проверяем, существует ли пользователь с данным электронным адресом
+        if not MarketUser.objects.filter(email=attrs['email']).exists():
+            raise serializers.ValidationError("Пользователь с таким электронным адресом не найден.")
+        return attrs
     
 
 
