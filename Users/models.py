@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import Group, User
+from rest_framework.response import Response
+from rest_framework import status
 
 
 class MarketUser(User):
@@ -19,7 +21,17 @@ class MarketUser(User):
         choices=USER_TYPES,  # типы пользователей
         default='Buyer'  # по умолчанию - покупатель
     )
-
+    
+    def AccessCheck(self, request, perm: str):
+        user_id = request.session.get('user_id')
+        if not user_id:
+            return False
+        # Получаем объект пользователя по ID
+        user = MarketUser.objects.get(id=user_id)
+        # Проверяем, имеет ли пользователь право на действие
+        if not user.has_perm(perm):
+            return False
+        return True
 # создаем моедль группы покупателей
 class UserGroup(Group):
     class Meta:

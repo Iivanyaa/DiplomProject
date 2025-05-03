@@ -40,7 +40,7 @@ class Parameters(models.Model):
     Поле products - продукты, у которых есть данный параметр
     """
     name = models.CharField(max_length=255)
-    value = models.CharField(max_length=255)
+    value = models.CharField(max_length=255) 
 
     def __str__(self):
         """
