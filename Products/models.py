@@ -41,7 +41,6 @@ class Parameters(models.Model):
     """
     name = models.CharField(max_length=255)
     value = models.CharField(max_length=255)
-    products = models.ManyToManyField(Product, related_name='parameters', blank=True)
 
     def __str__(self):
         """

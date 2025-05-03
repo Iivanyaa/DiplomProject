@@ -24,10 +24,11 @@ class UsersConfig(AppConfig):
         # права администратора
         admin_permissions = ['add_user', 'change_user', 'delete_user',
                              'view_user', 'update_user', 'delete_user_data',
-                             'get_user_data', 'change_password'
+                             'get_user_data', 'change_password', 'add_product',
+                             'delete_product'
                              ]
         # права продавца
-        seller_permissions = ['add_good', 'change_good', 'delete_good',
+        seller_permissions = ['add_product', 'change_good', 'delete_good',
                               'delete_user', 'view_good', 'update_user',
                               'delete_user_data', 'get_user_data', 'change_password'
                               ]

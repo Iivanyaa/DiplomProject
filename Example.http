@@ -81,3 +81,32 @@ Content-Type: application/json
 {
   "email": "Kozmaivan2013@gmail.com"  
 }
+
+###создание продукта
+POST http://127.0.0.1:8000/api/Products/ HTTP/1.1
+Content-Type: application/json
+
+{
+  "name": "Собака",
+  "price": "999.99",
+  "description": "Верная, красивая, быстрая",
+  "quantity": "1"
+}
+
+### получение продукта по id или названию
+
+GET http://127.0.0.1:8000/api/Products/ HTTP/1.1
+Content-Type: application/json
+
+{
+  "name": "Собака"
+}
+
+### удаление продукта по id или названию
+
+DELETE http://127.0.0.1:8000/api/Products/ HTTP/1.1
+Content-Type: application/json
+
+{
+  "sad": "1"
+}
