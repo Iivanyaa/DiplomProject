@@ -1,18 +1,29 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from .models import Product
+from .models import Product, Category
 
 # сериализаторы для продуктов
 class ProductSerializer(serializers.ModelSerializer):
+    categories = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Category.objects.all(),
+        required=False
+    )
+    
     class Meta:
         model = Product
-        fields = ['name', 'price', 'description', 'quantity', 'is_available']
+        fields = ['name', 'price', 'description', 'quantity', 'is_available', 'parameters', 'categories']
 
 
 # сериалазатор для поиска продуктов
 class ProductSearchSerializer(serializers.Serializer):
     id = serializers.IntegerField(required=False, allow_null=True)
     name = serializers.CharField(required=False, allow_blank=True)
+    categories = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Category.objects.all(),
+        required=False
+    )
 
     def validate(self, data):
         # Получаем все ключи из исходных данных
@@ -29,13 +40,14 @@ class ProductSearchSerializer(serializers.Serializer):
             )
         
         attrs = super().validate(data)
-        # Проверяем, что хотя бы одно поле передано
-        if not attrs.get('id') and not attrs.get('name'):
-            raise ValidationError("Укажите id или name для поиска.")
+        # # Проверяем, что хотя бы одно поле передано
+        # if not attrs.get('id') and not attrs.get('name'):
+        #     raise ValidationError("Укажите id или name для поиска.")
 
-        # Проверяем, что id и name не заданы одновременно
-        if attrs.get('id') and attrs.get('name'):
-            raise ValidationError('id и name не могут быть заданы одновременно')
+        # Проверяем, что не передано более одного параметра
+        if len([key for key, value in attrs.items() if value is not None]) > 1:
+            raise ValidationError('Укажите только один параметр')
+
         return attrs
     
 class ProductUpdateSerializer(serializers.Serializer):
@@ -67,6 +79,7 @@ class ProductUpdateSerializer(serializers.Serializer):
 
 
 class CategorySerializer(serializers.Serializer):
+    id = serializers.IntegerField(required=False, allow_null=True)
     name = serializers.CharField(required=True, allow_blank=False)
 
     def validate(self, data):
@@ -82,13 +95,18 @@ class CategorySerializer(serializers.Serializer):
                 f"Недопустимые поля: {', '.join(unknown_keys)}. "
                 f"Допустимые поля: {', '.join(allowed_keys)}."
             )
-
+        attrs = super().validate(data)
+        return attrs
 
 class CategorySearchSerializer(CategorySerializer):
     id = serializers.IntegerField(required=False, allow_null=True)
 
 
+class CategoryGetSerializer(CategorySerializer):
+    id = serializers.IntegerField(required=False, allow_null=False)
+    name = serializers.CharField(required=False, allow_null=True)
+
+
 class CategoryUpdateSerializer(CategorySerializer):
     id = serializers.IntegerField(required=True, allow_null=False)
     name = serializers.CharField(required=False, allow_null=True)
-    

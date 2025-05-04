@@ -15,8 +15,8 @@ POST http://127.0.0.1:8000/api/login/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "username": "BabbleTea",
-  "password": "dqKTysWn$hp0"
+  "username": "Baffet",
+  "password": "11111"
 }
 
 ###смена пароля
@@ -87,11 +87,12 @@ POST http://127.0.0.1:8000/api/Products/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "name": "Пшено",
+  "name": "Кукуруза",
   "price": "999.99",
   "description": "Хитрая, красивая, ловкая",
   "quantity": "1",
-  "попасобаки": "2"
+  "попасобаки": "2",
+  "categories": [2]
 }
 
 ### получение продукта по id или названию
@@ -100,7 +101,7 @@ GET http://127.0.0.1:8000/api/Products/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "name": "Собака"
+ 
 }
 
 ### удаление продукта по id или названию
@@ -120,4 +121,20 @@ Content-Type: application/json
   "description": "Жирный",
   "quantity": "3"
   
+}
+
+###создание категории
+POST http://127.0.0.1:8000/api/Categories/ HTTP/1.1
+Content-Type: application/json
+
+{
+  "name": "Авто"
+}
+
+###получение списка категорий или по id или названию
+GET http://127.0.0.1:8000/api/Categories/ HTTP/1.1
+Content-Type: application/json
+
+{
+ 
 }

@@ -21,6 +21,8 @@ class MarketUser(User):
         choices=USER_TYPES,  # типы пользователей
         default='Buyer'  # по умолчанию - покупатель
     )
+        
+    products = models.ForeignKey('Products.Product', on_delete=models.CASCADE, blank=True, null=True, related_name='user')
     
     def AccessCheck(self, request, perm: str):
         user_id = request.session.get('user_id')

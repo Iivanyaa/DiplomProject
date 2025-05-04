@@ -85,6 +85,10 @@ class RestorePasswordSerializer(serializers.Serializer):
         return attrs
     
 
+class ViewUsernameSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MarketUser
+        fields = ['username']
 
 
 

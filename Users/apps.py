@@ -24,13 +24,15 @@ class UsersConfig(AppConfig):
         # права администратора
         admin_permissions = ['add_user', 'change_user', 'delete_user',
                              'view_user', 'update_user', 'delete_user_data',
-                             'get_user_data', 'change_password', 'add_product',
-                             'delete_product'
+                             'get_user_data', 'change_password', 'delete_product',
+                             'create_category', 'delete_category', 'update_category',
+                             'get_category',
                              ]
         # права продавца
         seller_permissions = ['add_product', 'change_good', 'delete_good',
                               'delete_user', 'view_good', 'update_user',
-                              'delete_user_data', 'get_user_data', 'change_password'
+                              'delete_user_data', 'get_user_data', 'change_password',
+                              'get_category',
                               ]
         # права покупателя  
         buyer_permissions = [
@@ -39,7 +41,7 @@ class UsersConfig(AppConfig):
                              'view_payment', 'buy_payment', 'view_delivery',
                              'buy_delivery', 'view_review', 'buy_review',
                              'delete_user', 'update_user', 'delete_user_data',
-                             'get_user_data', 'change_password'
+                             'get_user_data', 'change_password', 'get_category'
                              ]
         
         content_type = ContentType.objects.get_for_model(UserGroup)
@@ -80,4 +82,3 @@ class UsersConfig(AppConfig):
             # добавляем право в список прав группы, если его там нет
             if permission_obj not in buyer_group.permissions.all():
                 buyer_group.permissions.add(permission_obj)
-
