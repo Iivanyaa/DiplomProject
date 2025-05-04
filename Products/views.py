@@ -4,8 +4,10 @@ from rest_framework.views import APIView
 
 from Users.models import MarketUser
 from Users.serializers import UserSerializer, ViewUsernameSerializer
-from .serializers import CategoryGetSerializer, CategoryUpdateSerializer, ProductSearchSerializer, ProductSerializer, ProductUpdateSerializer, CategorySerializer, CategorySearchSerializer
-from .models import Product, Category
+from .serializers import (ProductSerializer, ProductSearchSerializer, ProductAddToCartSerializer, ProductUpdateSerializer,
+                          CategorySerializer, CategorySearchSerializer, CategoryGetSerializer, CategoryUpdateSerializer,
+                          ProductAddSerializer, ProductsListSerializer)
+from .models import Product, Category, Cart, CartProduct
 from rest_framework import status
 
 
@@ -23,14 +25,15 @@ class ProductsView(APIView):
             products = Product.objects.all()
 
             return Response({'message': 'Все продукты',
-                             'products': ProductSerializer(products, many=True).data
+
+                             'products': ProductsListSerializer(products, many=True).data
                              }, status=status.HTTP_200_OK)
         
         # если передана категория, выводим список продуктов в этой категории
         if 'categories' in serializer.validated_data:
             products = Product.objects.filter(categories__in=serializer.validated_data['categories'])
             return Response({'message': 'Продукты в категории',
-                             'products': ProductSerializer(products, many=True).data
+                             'products': ProductsListSerializer(products, many=True).data
                              }, status=status.HTTP_200_OK)
         
         # если категория не передана ищем продукт по id или названию
@@ -135,6 +138,52 @@ class ProductsView(APIView):
         product = Product.objects.filter(**serializer.validated_data).delete()
         return Response({"message":"Продукт успешно удален"}, status=status.HTTP_200_OK)
     
+    # вьюшка для добавления продукта в корзину
+    def patch(self, request, perm='Users.add_to_cart'):
+        serializer = ProductAddToCartSerializer(data=request.data)
+        
+        # проверяем валидность данных
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                            
+        # проверяем наличие прав пользователя
+        if not MarketUser.AccessCheck(self, request, perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+
+        # ищем продукт по id или названию
+        try:
+            product = Product.objects.get(id=serializer.validated_data['id'])
+        # если продукт не найден, возвращаем ошибку
+        except Product.DoesNotExist:
+            return Response({'message': 'Продукт не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+        # проверяем наличие необходимого количества товара
+        if product.quantity < serializer.validated_data['quantity']:
+            return Response({'message': 'Недостаточное количество товара'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # получаем текущего пользователя
+        user = MarketUser.objects.get(id=request.session.get('user_id'))
+        
+        # Получаем активную корзину пользователя (или создаем новую)
+        cart, created = Cart.objects.get_or_create(user=user)
+
+        # Создаем или обновляем CartProduct
+        cart_product, created = CartProduct.objects.get_or_create(
+        product=product,
+        cart=cart,
+        defaults={'quantity': serializer.validated_data['quantity']}
+        )
+
+        if not created:
+            cart_product.quantity = serializer.validated_data['quantity']
+            cart_product.save()
+
+        return Response({
+            'message': 'Продукт добавлен в корзину',
+            'cart_id': cart.id,
+            'product_id': product.id,
+            'quantity': cart_product.quantity
+        }, status=status.HTTP_200_OK)
 
 # вьюшка для обработки запросов к категориям
 class CategoriesView(APIView):
@@ -204,3 +253,17 @@ class CategoriesView(APIView):
         category = categories.first()
         return Response({'message': 'Категория найдена', 'id': category.id, 'name': category.name}, status=status.HTTP_200_OK)
     
+class CartView(APIView):
+    def get(self, request, perm='Users.get_cart'):
+        # проверяем имеет ли пользователь право на получение корзины
+        if not MarketUser.AccessCheck(self, request, perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+        # получаем текущего пользователя
+        user = MarketUser.objects.get(id=request.session.get('user_id'))
+        # Получаем активную корзину пользователя (или создаем новую)
+        cart, created = Cart.objects.get_or_create(user=user)
+        # возвращаем корзину
+        return Response({'message': 'Корзина успешно получена',
+                         'id': cart.id,
+                         'Cart_products'
+                         }, status=status.HTTP_200_OK)

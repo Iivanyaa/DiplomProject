@@ -37,7 +37,7 @@ class UsersConfig(AppConfig):
         # права покупателя  
         buyer_permissions = [
                              'view_good', 'buy_good', 'view_order',
-                             'buy_order', 'view_cart', 'buy_cart',
+                             'add_to_cart', 'view_cart', 'buy_cart',
                              'view_payment', 'buy_payment', 'view_delivery',
                              'buy_delivery', 'view_review', 'buy_review',
                              'delete_user', 'update_user', 'delete_user_data',

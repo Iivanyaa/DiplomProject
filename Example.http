@@ -5,8 +5,8 @@ Content-Type: application/json
 {
   "email": "Kozmaivan2013@gmail.com",
   "password": "11111",
-  "username": "BabbleTea",
-  "user_type": "Admin"
+  "username": "Chicky",
+  "user_type": "Buyer"
 }
 
 ###логин
@@ -15,7 +15,7 @@ POST http://127.0.0.1:8000/api/login/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "username": "Baffet",
+  "username": "Chicky",
   "password": "11111"
 }
 
@@ -103,6 +103,18 @@ Content-Type: application/json
 {
  
 }
+
+### добавление продукта по id в корзину
+
+PATCH http://127.0.0.1:8000/api/Products/ HTTP/1.1
+Content-Type: application/json
+
+{
+ "id": 3,
+ "quantity": 1
+}
+
+
 
 ### удаление продукта по id или названию
 

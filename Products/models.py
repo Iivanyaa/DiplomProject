@@ -58,7 +58,9 @@ class Cart(models.Model):
     Поле created_at - дата создания
     Поле updated_at - дата обновления
     """
-    user = models.ForeignKey('Users.MarketUser', on_delete=models.SET_NULL, null=True, related_name='carts')
+    # unique=True - означает, что для каждого пользователя может быть только одна корзина.
+    # Если создать для пользователя еще одну корзину, то предыдущая будет удалена.
+    user = models.ForeignKey('Users.MarketUser', on_delete=models.SET_NULL, null=True, related_name='carts', unique=True)
     products = models.ManyToManyField(Product, related_name='carts', through='CartProduct')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
