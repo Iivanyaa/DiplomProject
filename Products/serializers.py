@@ -155,14 +155,24 @@ class CategoryUpdateSerializer(CategorySerializer):
     name = serializers.CharField(required=False, allow_null=True)
 
 
-__all__ = [
-    'ProductSerializer',
-    'ProductSearchSerializer',
-    'ProductAddToCartSerializer',
-    'ProductAddSerializer',
-    'ProductUpdateSerializer',
-    'CategorySerializer',
-    'CategorySearchSerializer',
-    'CategoryGetSerializer',
-    'CategoryUpdateSerializer',
-]
+class CartProductSearchSerializer(serializers.Serializer):
+    id = serializers.IntegerField(required=True, allow_null=False)
+
+
+    def validate(self, data):
+        # Получаем все ключи из исходных данных
+        received_keys = set(self.initial_data.keys())
+        # Получаем ключи, объявленные в сериализаторе
+        allowed_keys = set(self.fields.keys())
+        # Находим неизвестные ключи
+        unknown_keys = received_keys - allowed_keys
+        # Проверяем наличие неизвестных ключей
+        if unknown_keys:
+            raise ValidationError(
+                f"Недопустимые поля: {', '.join(unknown_keys)}. "
+                f"Допустимые поля: {', '.join(allowed_keys)}."
+            )
+        
+        attrs = super().validate(data)
+    
+        return attrs

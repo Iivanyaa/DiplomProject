@@ -41,7 +41,8 @@ class UsersConfig(AppConfig):
                              'view_payment', 'buy_payment', 'view_delivery',
                              'buy_delivery', 'view_review', 'buy_review',
                              'delete_user', 'update_user', 'delete_user_data',
-                             'get_user_data', 'change_password', 'get_category'
+                             'get_user_data', 'change_password', 'get_category',
+                             'update_product_in_cart', 'delete_product_from_cart'
                              ]
         
         content_type = ContentType.objects.get_for_model(UserGroup)

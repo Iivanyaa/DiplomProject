@@ -65,6 +65,12 @@ class Cart(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def TotalPrice(self):
+        """
+        общая стоимость корзины
+        """
+        return sum([product.price for product in self.products.all()])
+
 
 # модель продукта в корзине
 class CartProduct(models.Model):

@@ -6,7 +6,7 @@ from Users.models import MarketUser
 from Users.serializers import UserSerializer, ViewUsernameSerializer
 from .serializers import (ProductSerializer, ProductSearchSerializer, ProductAddToCartSerializer, ProductUpdateSerializer,
                           CategorySerializer, CategorySearchSerializer, CategoryGetSerializer, CategoryUpdateSerializer,
-                          ProductAddSerializer, ProductsListSerializer)
+                          ProductAddSerializer, ProductsListSerializer, CartProductSearchSerializer)
 from .models import Product, Category, Cart, CartProduct
 from rest_framework import status
 
@@ -254,7 +254,7 @@ class CategoriesView(APIView):
         return Response({'message': 'Категория найдена', 'id': category.id, 'name': category.name}, status=status.HTTP_200_OK)
     
 class CartView(APIView):
-    def get(self, request, perm='Users.get_cart'):
+    def get(self, request, perm='Users.view_cart'):
         # проверяем имеет ли пользователь право на получение корзины
         if not MarketUser.AccessCheck(self, request, perm):
             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
@@ -262,8 +262,81 @@ class CartView(APIView):
         user = MarketUser.objects.get(id=request.session.get('user_id'))
         # Получаем активную корзину пользователя (или создаем новую)
         cart, created = Cart.objects.get_or_create(user=user)
+        # Получаем стоимость корзины
+        total_price = int(cart.TotalPrice())
         # возвращаем корзину
         return Response({'message': 'Корзина успешно получена',
                          'id': cart.id,
-                         'Cart_products'
+                         'Cart_products': cart.products.all().values('name', 'quantity', 'price'),
+                         'Total_price': total_price
                          }, status=status.HTTP_200_OK)
+
+    def delete(self, request, perm='Users.delete_product_from_cart'):
+        serializer = CartProductSearchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # проверяем имеет ли пользователь право на удаление товаров из корзины
+        if not MarketUser.AccessCheck(self, request, perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+        # ищем товар по id или названию
+        products = Product.objects.filter(**serializer.validated_data)
+        # если товар не найдена, возвращаем ошибку
+        if not products.exists():
+            return Response({'message': 'Товар не найдена'}, status=status.HTTP_404_NOT_FOUND)
+        # ищем корзину текущего пользователя
+        user = MarketUser.objects.get(id=request.session.get('user_id'))
+        cart, created = Cart.objects.get_or_create(user=user)
+        # если товар есть в корзине, то удаляем его из корзины
+        if products.first() in cart.products.all():
+            cart_product = CartProduct.objects.filter(cart=cart, product=products.first()).delete()
+            return Response({"message": "Товар успешно удален из корзины"}, status=status.HTTP_200_OK)
+        # если товара нет в корзине, то возвращаем ошибку
+        return Response({"message": "Товар не находится в корзине"}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, perm='Users.update_product_in_cart'):
+        serializer = ProductAddToCartSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # проверяем имеет ли пользователь право на изменение товаров в корзине
+        if not MarketUser.AccessCheck(self, request, perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+        # ищем товар по id или названию
+        products = Product.objects.get(id=serializer.validated_data['id'])
+        # если товар не найдена, возвращаем ошибку
+        if products is None:
+            return Response({'message': 'Товар не найден'}, status=status.HTTP_404_NOT_FOUND)
+        # ищем корзину текущего пользователя
+        user = MarketUser.objects.get(id=request.session.get('user_id'))
+        cart, created = Cart.objects.get_or_create(user=user)
+        # если товар есть в корзине, то обновляем количество товара в корзине
+        if products in cart.products.all():
+            cart_product = CartProduct.objects.filter(cart=cart, product=products).update(quantity=serializer.validated_data['quantity'])
+            return Response({"message": "Товар успешно обновлен в корзине"}, status=status.HTTP_200_OK)
+        # если товара нет в корзине, то возвращаем ошибку
+        return Response({"message": "Товар не находится в корзине"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # def post(self, request, perm='Users.order'):
+    #     # проверяем имеет ли пользователь право на оформление заказа
+    #     if not MarketUser.AccessCheck(self, request, perm):
+    #         return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+    #     # получаем текущего пользователя
+    #     user = MarketUser.objects.get(id=request.session.get('user_id'))
+    #     # Получаем активную корзину пользователя (или создаем новую)
+    #     cart, created = Cart.objects.get_or_create(user=user)
+    #     # Создаем заказ
+    #     order = Order.objects.create(
+    #         user=user,
+    #         total_price=cart.TotalPrice(),
+    #         status='new'
+    #     )
+    #     # добавляем товары из корзины в заказ
+    #     for product in cart.products.all():
+    #         order_product = OrderProduct.objects.create(
+    #             order=order,
+    #             product=product,
+    #             quantity=product.cart_products.first().quantity
+    #         )
+    #     # очищаем корзину
+    #     cart.products.all().delete()
+    #     # отправляем email
+    #     send_order_email(user, order)
+    #     return Response({"message": "Заказ успешно оформлен"}, status=status.HTTP_201_CREATED)
+
