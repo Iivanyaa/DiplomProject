@@ -2,6 +2,7 @@ from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from Orders.models import Order, OrderProduct
 from Users.models import MarketUser
 from Users.serializers import UserSerializer, ViewUsernameSerializer
 from .serializers import (ProductSerializer, ProductSearchSerializer, ProductAddToCartSerializer, ProductUpdateSerializer,
@@ -9,6 +10,8 @@ from .serializers import (ProductSerializer, ProductSearchSerializer, ProductAdd
                           ProductAddSerializer, ProductsListSerializer, CartProductSearchSerializer)
 from .models import Product, Category, Cart, CartProduct
 from rest_framework import status
+from django.core.mail import send_mail
+import os
 
 
 # вьюшка для обработки запросов к продуктам
@@ -60,7 +63,8 @@ class ProductsView(APIView):
             name=serializer.validated_data['name'],
             price=serializer.validated_data['price'],
             description=serializer.validated_data['description'],
-            quantity=serializer.validated_data['quantity']
+            quantity=serializer.validated_data['quantity'],
+            seller=MarketUser.objects.get(id=request.session.get('user_id'))
         )
 
         # Добавляем категории (если они указаны)
@@ -70,7 +74,9 @@ class ProductsView(APIView):
                 product.categories.add(category)
 
         # привязываем продукт к пользователю
-        product.user.add(MarketUser.objects.get(id=request.session.get('user_id')))
+        # seller = MarketUser.objects.get(id=request.session.get('user_id'))
+        # seller.priducts.add(product)
+        #product.seller.add(MarketUser.objects.get(id=request.session.get('user_id')))
 
         return Response({
             'message': 'Продукт успешно создан',
@@ -265,11 +271,22 @@ class CartView(APIView):
         # Получаем стоимость корзины
         total_price = int(cart.TotalPrice())
         # возвращаем корзину
-        return Response({'message': 'Корзина успешно получена',
-                         'id': cart.id,
-                         'Cart_products': cart.products.all().values('name', 'quantity', 'price'),
-                         'Total_price': total_price
-                         }, status=status.HTTP_200_OK)
+        return Response({
+            'message': 'Корзина успешно получена',
+            'id': cart.id,
+            'Cart_products': [
+                {
+                    'name': product.name,
+                    'quantity': product.cart_products.get(cart=cart).quantity,
+                    'price': product.price,
+                    'id': product.id,
+                    'is_available': product.is_available,
+                    'seller': product.seller.username
+                }
+                for product in cart.products.all()
+            ],
+            'Total_price': total_price
+        }, status=status.HTTP_200_OK)
 
     def delete(self, request, perm='Users.delete_product_from_cart'):
         serializer = CartProductSearchSerializer(data=request.data)
@@ -313,30 +330,51 @@ class CartView(APIView):
         # если товара нет в корзине, то возвращаем ошибку
         return Response({"message": "Товар не находится в корзине"}, status=status.HTTP_400_BAD_REQUEST)
 
-    # def post(self, request, perm='Users.order'):
-    #     # проверяем имеет ли пользователь право на оформление заказа
-    #     if not MarketUser.AccessCheck(self, request, perm):
-    #         return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
-    #     # получаем текущего пользователя
-    #     user = MarketUser.objects.get(id=request.session.get('user_id'))
-    #     # Получаем активную корзину пользователя (или создаем новую)
-    #     cart, created = Cart.objects.get_or_create(user=user)
-    #     # Создаем заказ
-    #     order = Order.objects.create(
-    #         user=user,
-    #         total_price=cart.TotalPrice(),
-    #         status='new'
-    #     )
-    #     # добавляем товары из корзины в заказ
-    #     for product in cart.products.all():
-    #         order_product = OrderProduct.objects.create(
-    #             order=order,
-    #             product=product,
-    #             quantity=product.cart_products.first().quantity
-    #         )
-    #     # очищаем корзину
-    #     cart.products.all().delete()
-    #     # отправляем email
-    #     send_order_email(user, order)
-    #     return Response({"message": "Заказ успешно оформлен"}, status=status.HTTP_201_CREATED)
+    def post(self, request, perm='Users.order'):
+        # проверяем имеет ли пользователь право на оформление заказа
+        if not MarketUser.AccessCheck(self, request, perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+        # получаем текущего пользователя
+        user = MarketUser.objects.get(id=request.session.get('user_id'))
+        # Получаем активную корзину пользователя (или создаем новую)
+        cart, created = Cart.objects.get_or_create(user=user)
+        # проверяем, есть ли в корщине товары
+        if not cart.cart_products.exists():
+             return Response({'message': 'В корзине нет товаров'}, status=status.HTTP_406_NOT_ACCEPTABLE)
+        # Создаем заказ
+        order = Order.objects.create(
+            user=user,
+            total_price=cart.TotalPrice()
+        )
+        # добавляем товары из корзины в заказ
+        for product in cart.cart_products.all():
+            order_product = OrderProduct.objects.create(
+                order=order,
+                product=product.product,
+                quantity=product.quantity,
+                seller=product.product.seller,
+                buyer=product.cart.user,
+                status='new'
+            )
+            order.order_products.add(order_product)
+            # уменьшаем количество товара в БД
+            product.product.quantity -= product.quantity
+            product.product.save()
+            # удаляем товар из корзины
+            cart_product = CartProduct.objects.filter(cart=cart, product=product.product).delete()
+        # очищаем корзину
+        cart.products.all().delete()
+        # отправляем email
+        send_mail(
+            subject='Новый заказ',
+            message=f'Вы успешно оформили новый заказ:{order}',
+            recipient_list=[user.email],
+            from_email=os.getenv('EMAIL_HOST_USER'),
+            fail_silently=True
+        )
+        return Response({"message": "Заказ успешно оформлен",
+                         "id": order.id,
+                         "total_price": order.total_price,
+                         "order_products": [order_product.product.name for order_product in order.order_products.all()]
+                         }, status=status.HTTP_201_CREATED)
 

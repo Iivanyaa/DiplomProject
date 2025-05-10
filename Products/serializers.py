@@ -12,7 +12,7 @@ class ProductSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Product
-        fields = ['name', 'price', 'description', 'quantity', 'is_available', 'parameters', 'categories']
+        fields = ['name', 'price', 'description', 'quantity', 'is_available', 'categories']
 
 class ProductsListSerializer(ProductSerializer):
     id = serializers.IntegerField(required=False, allow_null=True)

@@ -22,6 +22,7 @@ from rest_framework.documentation import include_docs_urls
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('Users.urls')),
-    path('api/', include('Products.urls'))
+    path('api/', include('Products.urls')),
+    path('api/', include('Orders.urls'))
     # path('docs/', include_docs_urls(title='Моя API')),
 ]

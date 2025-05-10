@@ -5,7 +5,7 @@ Content-Type: application/json
 {
   "email": "Kozmaivan2013@gmail.com",
   "password": "11111",
-  "username": "Chicky",
+  "username": "Baffet",
   "user_type": "Buyer"
 }
 
@@ -15,7 +15,7 @@ POST http://127.0.0.1:8000/api/login/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "username": "Chicky",
+  "username": "Barbie",
   "password": "11111"
 }
 
@@ -87,12 +87,11 @@ POST http://127.0.0.1:8000/api/Products/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "name": "Кукуруза",
-  "price": "999.99",
-  "description": "Хитрая, красивая, ловкая",
-  "quantity": "1",
-  "попасобаки": "2",
-  "categories": [2]
+  "name": "Пепси",
+  "price": "36",
+  "description": "Вкусно",
+  "quantity": 43,
+  "categories": [3]
 }
 
 ### получение продукта по id или названию
@@ -110,8 +109,8 @@ PATCH http://127.0.0.1:8000/api/Products/ HTTP/1.1
 Content-Type: application/json
 
 {
- "id": 6,
- "quantity": 1
+ "id": 2,
+ "quantity": 5
 }
 
 
@@ -122,7 +121,7 @@ DELETE http://127.0.0.1:8000/api/Products/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "sad": "1"
+
 }
 
 ###изменение продукта
@@ -140,7 +139,7 @@ POST http://127.0.0.1:8000/api/Categories/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "name": "Авто"
+  "name": "Напитки"
 }
 
 ###получение списка категорий или по id или названию
@@ -148,7 +147,7 @@ GET http://127.0.0.1:8000/api/Categories/ HTTP/1.1
 Content-Type: application/json
 
 {
- 
+ "id": 3
 }
 
 ###получение корзины
@@ -164,12 +163,7 @@ Content-Type: application/json
  "id": 
 }
 
-### изменение количества товара в корзине
+### оформление заказа
 
-PUT  http://127.0.0.1:8000/api/Cart/ HTTP/1.1
+POST  http://127.0.0.1:8000/api/Cart/ HTTP/1.1
 Content-Type: application/json
-
-{
- "id": 1,
- "quantity": 3
-}

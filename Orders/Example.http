@@ -1,0 +1,19 @@
+### получение списка заказов
+
+GET http://127.0.0.1:8000/api/Orders/ HTTP/1.1
+Content-Type: application/json
+
+{
+ 
+}
+
+
+### изменение статуса заказа
+
+PUT http://127.0.0.1:8000/api/Orders/ HTTP/1.1
+Content-Type: application/json
+
+{
+    "id":4,
+    "status": "Completed"
+}

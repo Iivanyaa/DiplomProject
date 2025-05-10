@@ -4,7 +4,7 @@ from django.apps import AppConfig
 class UsersConfig(AppConfig):
     name = 'Users'
 
-    # метод который будет выполнен при запуске приложения
+    #метод который будет выполнен при запуске приложения
     def ready(self):
         # создаем 3 группы: администратор, продавец, покупатель
         from .models import UserGroup
@@ -26,13 +26,13 @@ class UsersConfig(AppConfig):
                              'view_user', 'update_user', 'delete_user_data',
                              'get_user_data', 'change_password', 'delete_product',
                              'create_category', 'delete_category', 'update_category',
-                             'get_category',
+                             'get_category', 'view_orders', 'update_order_status'
                              ]
         # права продавца
         seller_permissions = ['add_product', 'change_good', 'delete_good',
                               'delete_user', 'view_good', 'update_user',
                               'delete_user_data', 'get_user_data', 'change_password',
-                              'get_category',
+                              'get_category', 'view_orders', 'update_order_status'
                               ]
         # права покупателя  
         buyer_permissions = [
@@ -42,7 +42,8 @@ class UsersConfig(AppConfig):
                              'buy_delivery', 'view_review', 'buy_review',
                              'delete_user', 'update_user', 'delete_user_data',
                              'get_user_data', 'change_password', 'get_category',
-                             'update_product_in_cart', 'delete_product_from_cart'
+                             'update_product_in_cart', 'delete_product_from_cart',
+                             'order', 'view_orders'
                              ]
         
         content_type = ContentType.objects.get_for_model(UserGroup)

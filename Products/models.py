@@ -22,7 +22,7 @@ class Product(models.Model):
     is_available = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    parameters = models.ForeignKey('Parameters', on_delete=models.SET_NULL, null=True, related_name='products')
+    seller = models.ForeignKey('Users.MarketUser', on_delete=models.CASCADE, null=True, related_name='products')
 
     def __str__(self):
         """
@@ -40,7 +40,8 @@ class Parameters(models.Model):
     Поле products - продукты, у которых есть данный параметр
     """
     name = models.CharField(max_length=255)
-    value = models.CharField(max_length=255) 
+    value = models.CharField(max_length=255)
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, null=True, related_name='parameters')
 
     def __str__(self):
         """
@@ -69,7 +70,7 @@ class Cart(models.Model):
         """
         общая стоимость корзины
         """
-        return sum([product.price for product in self.products.all()])
+        return sum([product.price*product.cart_products.get(cart=self).quantity for product in self.products.all()])
 
 
 # модель продукта в корзине
