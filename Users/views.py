@@ -2,7 +2,7 @@ import os
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import RestorePasswordSerializer, UserRegSerializer, DeleteUserDataSerializer, GetUserDataSerializer, LoginSerializer, ChangePasswordSerializer
+from .serializers import DeleteUserSerializer, RestorePasswordSerializer, UserRegSerializer, DeleteUserDataSerializer, GetUserDataSerializer, LoginSerializer, ChangePasswordSerializer, UserUpdateSerializer
 from .models import MarketUser, UserGroup
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password, check_password
@@ -93,62 +93,78 @@ class ChangePasswordView(APIView):
 # Удаление пользователя
 class DeleteUserView(APIView):
     def delete(self, request):
-        user_id = request.session.get('user_id')
-        if not user_id:
-            # Если пользователь не аутентифицирован, возвращаем ошибку
-            return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED, content_type='application/json')
-        try:
-            user = MarketUser.objects.get(id=user_id)
-        except MarketUser.DoesNotExist:
-            return Response({'message': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND, content_type='application/json')
-        if not user.has_perm("Users.delete_user"):
-            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN, content_type='application/json')
-        # Удаляем пользователя
-        user.delete()
+        # создаем объект serializer, передаем ему данные из запроса
+        serializer = DeleteUserSerializer(data=request.data)
+        # проверяем, есть ли в запросе id пользователя или username
+        if 'id' not in request.data and 'username' not in request.data:
+            # если нет, то удаляем текущего пользователя
+            # Проверяем, имеет ли пользователь право на самоудаление
+            if not MarketUser.AccessCheck(self, request=request, perm='Users.delete_self'):
+                return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED, content_type='application/json')
+            # получаем объеат пользователя из сессии
+            user = MarketUser.objects.get(id=request.session.get('user_id'))
+            # Удаляем пользователя
+            user.delete()
+            # Возвращаем ответ, что пользователь успешно удален
+            return Response({'message': 'Пользователь успешно удален'}, status=status.HTTP_200_OK, content_type='application/json')
+        # если в запросе есть id пользователя или username, то удаляем пользователя по id или username
+        # Проверяем, имеет ли пользователь право на удаление пользователя
+        if not MarketUser.AccessCheck(self, request=request, perm='Users.delete_user'):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED, content_type='application/json')
+        # удаляем пользователя по id или username
+        if serializer.is_valid(raise_exception=True):
+            user = MarketUser.objects.filter(**serializer.validated_data).first()
+            user.delete()
         # Возвращаем ответ, что пользователь успешно удален
         return Response({'message': 'Пользователь успешно удален'}, status=status.HTTP_200_OK, content_type='application/json')
 
 
 # Изменение данных пользователя
 class UpdateUserView(APIView):
-    def put(self, request):
-        # ID текущего пользователя
-        user_id = request.session.get('user_id')
-        if not user_id:
-            # Если пользователь не аутентифицирован, возвращаем ошибку
+    def put(self, request, perm='Users.update_user'):
+        serializer = UserUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # проверяем аутентифицирован ли пользователь
+        if request.session.get('user_id') is None:
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
-        # Получаем объект пользователя по ID
-        try:
-            user = MarketUser.objects.get(id=user_id)
-        except:
-            return Response({'message': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)    
-        # Создаем объект serializer, передаем ему данные из запроса и объект пользователя
-        if not user.has_perm("Users.update_user"):
-            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN, content_type='application/json')
-        serializer = UserRegSerializer(user, data=request.data, partial=True)
-        # Проверяем, валидны ли данные
-        if serializer.is_valid(raise_exception=True):
-            # Если данные валидны, сохраняем их
-            serializer.save()
-            # Возвращаем ответ, что данные успешно изменены
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        # Если данные не валидны, возвращаем ошибки
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Получаем ID пользователя из запроса или из сессии
+        user_id = serializer.validated_data.get('id') or request.session.get('user_id')
+        if not user_id:
+            return Response({'message': 'ID пользователя не найден'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Получаем пользователя по ID
+        user = MarketUser.objects.filter(id=user_id).first()
+        if not user:
+            return Response({'message': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Проверяем наличие прав на изменение данных пользователя
+        if user_id != request.session.get('user_id') and not MarketUser.AccessCheck(self, request=request, perm=perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Обновляем данные пользователя
+        for field, value in serializer.validated_data.items():
+            setattr(user, field, value)
+        user.save()
+        
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 # удаление данных пользователя
 class DeleteUserDataView(APIView):
-    def delete(self, request):
-        # ID текущего пользователя
-        user_id = request.session.get('user_id')
-        if not user_id:
-            # Если пользователь не аутентифицирован, возвращаем ошибку
+    def delete(self, request, perm='Users.delete_user_data'):
+        # проверяем аутентифицирован ли пользователь
+        if request.session.get('user_id') is None:
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
+        # Получаем ID пользователя из запроса, если он не указан, то используем ID из сессии
+        user_id = request.data.get('id') or request.session.get('user_id')
+        # проверяем наличие пользователя
+        if not MarketUser.objects.filter(id=user_id).exists():
+            return Response({'message': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        # Проверяем наличия прав на удаление данных пользователя
+        if user_id != request.session.get('user_id') and not MarketUser.AccessCheck(self, request=request, perm=perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED)
         # Получаем объект пользователя по ID
         user = MarketUser.objects.get(id=user_id)
-        # Проверяем, имеет ли пользователь право на удаление данных
-        if not user.has_perm("Users.delete_user_data"):
-            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN, content_type='application/json')
         # Создаем объект serializer, передаем ему данные из запроса
         serializer = DeleteUserDataSerializer(data=request.data)
         # удаляем выбранные параметры пользователя в соответствии с данными сериализатора
@@ -169,33 +185,29 @@ class DeleteUserDataView(APIView):
 
 # получение данных пользователя по ID
 class GetUserDataView(APIView):
-    def get(self, request):
-        # Получаем ID текущего пользователя из сессии
-        user_id = request.session.get('user_id')
-        if not user_id:
-            # Если пользователь не аутентифицирован, возвращаем ошибку
-            return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
-        # Проверяем, имеет ли пользователь право на получение данных
-        user = MarketUser.objects.get(id=user_id)
-        if not user.has_perm("Users.get_user_data"):
-            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN, content_type='application/json')
+    def get(self, request, perm='Users.get_user_data'):
         # Создаем объект сериализатора, передаем ему данные из запроса
         serializer = GetUserDataSerializer(data=request.data)
-        # Проверяем, валидны ли данные
-        if serializer.is_valid(raise_exception=True):
-            # Получаем объект пользователя по ID, указанному в сериализаторе
-            user = MarketUser.objects.get(id=serializer.validated_data['user_id'])
-            # Возвращаем данные пользователя
-            return Response({
-                'message': 'Данные пользователя успешно получены',
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'phone_number': user.phone_number,
-                'email': user.email,
-                'username': user.username
-            }, status=status.HTTP_200_OK)
-        # Если данные не валидны, возвращаем ошибку
-        return Response({'message': 'Данные невалидны'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        
+        # получаем ID пользователя из запроса, если он не указан, то используем ID из сессии
+        user_id = serializer.validated_data.get('id') or request.session.get('user_id')
+        print(user_id, request.session.get('user_id'))
+        # проверяем наличия прав на получение данных другого пользователя
+        if user_id != request.session.get('user_id') and not MarketUser.AccessCheck(self, request=request, perm=perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED , content_type='application/json')
+        # проверяем наличие пользователя
+        if not MarketUser.objects.filter(id=user_id).exists():
+            return Response({'message': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Получаем объект пользователя по ID
+        user = MarketUser.objects.get(id=user_id)
+        
+        # Возвращаем данные пользователя
+        return Response({
+            'message': 'Данные пользователя успешно получены',
+            'данные пользователя':UserRegSerializer(user).data
+        }, status=status.HTTP_200_OK)
 
 
 # восстановление пароля по электроронному адресу
@@ -208,7 +220,7 @@ class RestorePasswordView(APIView):
             # Получаем объект пользователя по электронному адресу
             try:
                 user = MarketUser.objects.get(email=serializer.validated_data['email'])
-            except MarketUser.DoesNotExist:
+            except user.DoesNotExist:
                 return Response({'message': 'Пользователь с таким электронным адресом не найден'}, status=status.HTTP_404_NOT_FOUND)
             #Генерируем новый пароль
             new_password = generate_secure_password()

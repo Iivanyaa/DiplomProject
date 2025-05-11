@@ -57,8 +57,15 @@ class OrderView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         # изменяем статус заказа
         order = OrderProduct.objects.get(id=serializer.validated_data['id'])
+        if order.status == str(serializer.validated_data['status']):
+            return Response({'message': 'Статус заказа не изменился'}, status=status.HTTP_400_BAD_REQUEST)
         order.status = str(serializer.validated_data['status'])
         order.save()
+        if order.status == 'Canceled':
+            for order_product in order.order.order_products.all():
+                order_product.product.quantity += order_product.quantity
+                order_product.product.save()
+                order_product.delete()
         return Response({'message': 'Статус заказа успешно изменен',
                          'order': order.id,
                          'status': order.status}, status=status.HTTP_200_OK)

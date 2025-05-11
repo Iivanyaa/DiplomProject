@@ -32,6 +32,7 @@ class MarketUser(User):
         if not user.has_perm(perm):
             return False
         return True
+
 # создаем моедль группы покупателей
 class UserGroup(Group):
     class Meta:
