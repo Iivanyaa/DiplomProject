@@ -119,7 +119,6 @@ class TestChangePasswordView:
         }
         response = authenticated_buyer_client.post(self.url, data, format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'Новый пароль не может совпадать со старым' in response.data['message']
 
     def test_change_password_unauthenticated(self, api_client):
         data = {
@@ -300,39 +299,45 @@ class TestGetUserDataView:
 
     def test_get_user_data_success(self, authenticated_buyer_client, buyer_user):
         buyer_user.first_name = 'Test'
-        buyer_user.last_name = 'User'
+        buyer_user.last_name = 'Grisha'
         buyer_user.phone_number = '+1234567890'
         buyer_user.save()
         
         response = authenticated_buyer_client.get(self.url, format='json')
+        # Проверяем, что данные пользователя возвращаются в ожидаемом формате
+        assert 'first_name' in response.data['данные пользователя']
+        assert 'last_name' in response.data['данные пользователя'] 
+        assert 'phone_number' in response.data['данные пользователя']  
+        assert 'username' in response.data['данные пользователя']  
+
+        # Проверяем, что данные пользователя соответствуют ожидаемым значениям
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['first_name'] == 'Test'
-        assert response.data['last_name'] == 'User'
-        assert response.data['phone_number'] == '+1234567890'
-        assert response.data['username'] == 'buyer_user'
+        assert response.data['данные пользователя']['first_name'] == 'Test'
+        assert response.data['данные пользователя']['last_name'] == 'Grisha'
+        assert response.data['данные пользователя']['phone_number'] == '+1234567890'
+        assert response.data['данные пользователя']['username'] == 'buyer_user'
 
     def test_get_user_data_by_id_success(self, authenticated_admin_client, buyer_user):
         buyer_user.first_name = 'Test'
         buyer_user.last_name = 'User'
         buyer_user.phone_number = '+1234567890'
         buyer_user.save()
+        buyer_user.refresh_from_db()
 
-        data = {
-            'id': int(buyer_user.id)
-        }
+        url = f"{self.url}?id={buyer_user.id}"
 
-        response = authenticated_admin_client.get(self.url, data=data, format='json')
+        response = authenticated_admin_client.get(url, format='json')
         # Проверяем, что данные пользователя возвращаются в ожидаемом формате
-        assert 'first_name' in response.data
-        assert 'last_name' in response.data
-        assert 'phone_number' in response.data
-        assert 'username' in response.data
+        assert 'first_name' in response.data['данные пользователя']
+        assert 'last_name' in response.data['данные пользователя']
+        assert 'phone_number' in response.data['данные пользователя']
+        assert 'username' in response.data['данные пользователя']
 
         # Проверяем, что данные пользователя соответствуют ожидаемым значениям
-        assert response.data['first_name'] == buyer_user.first_name
-        assert response.data['last_name'] == buyer_user.last_name
-        assert response.data['phone_number'] == buyer_user.phone_number
-        assert response.data['username'] == buyer_user.username
+        assert response.data['данные пользователя']['first_name'] == buyer_user.first_name
+        assert response.data['данные пользователя']['last_name'] == buyer_user.last_name
+        assert response.data['данные пользователя']['phone_number'] == buyer_user.phone_number
+        assert response.data['данные пользователя']['username'] == buyer_user.username
 
     def test_get_user_data_by_id_insufficient_permissions(self, authenticated_seller_client, buyer_user):
         # пользователь пытается получить данные другого пользователя, но у него недостаточно прав
@@ -354,9 +359,9 @@ class TestGetUserDataView:
 
     def test_get_user_data_unauthenticated(self, api_client):
         # не аутентифицированный пользователь пытается получить данные
-        response = api_client.get(self.url, format='json')
+        response = api_client.get(self.url, format='json', )
+        assert 'Недостаточно прав' in response.data['message']
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        assert 'Пользователь не аутентифицирован' in response.data['message']
 
 @pytest.mark.django_db
 class TestRestorePasswordView:

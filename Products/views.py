@@ -56,7 +56,7 @@ class ProductsView(APIView):
         serializer.is_valid(raise_exception=True)
 
         if not MarketUser.AccessCheck(self, request, perm):
-            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED)
                 
         # создаем продукт
         product = Product.objects.create(
@@ -99,27 +99,26 @@ class ProductsView(APIView):
         if not user.has_perm('Users.update_product'):
             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
         # Ищем продукт
-        products = Product.objects.filter(pk=serializer.validated_data['id'])
+        try:
+            product = Product.objects.get(pk=serializer.validated_data['id'])
         # если продукт не найден, возвращаем ошибку
-        if not products.exists():
+        except Product.DoesNotExist:
             return Response({'message': 'Продукт не найден'}, status=status.HTTP_404_NOT_FOUND)
         # проверяем, что продукт с таким названием не существует
         if 'name' in serializer.validated_data.keys(): 
             if Product.objects.filter(name=serializer.validated_data['name']).exists():
                 return Response({'message': 'Продукт с таким названием уже существует'}, status=status.HTTP_400_BAD_REQUEST)
-        # изменяем продукт
-        product = Product.objects.filter(pk=serializer.validated_data['id']).update(**serializer.validated_data)
-        new_product = Product.objects.get(pk=serializer.validated_data['id'])
+        # изменяем только разрешенные поля
+        allowed_fields = ['price', 'description', 'quantity', 'is_available', 'name']
+        update_data = {k: v for k, v in serializer.validated_data.items() if k in allowed_fields}
+        for key, value in update_data.items():
+            setattr(product, key, value)
+            
+        product.save()
+
         return Response(
             {"message": "Продукт успешно изменен",
-             "product": {
-                 "id": new_product.id,
-                 "name": new_product.name,
-                 "price": new_product.price,
-                 "description": new_product.description,
-                 "quantity": new_product.quantity,
-                 "is_available": new_product.is_available
-             }
+             "product": ProductSerializer(product).data
              }, status=status.HTTP_200_OK)
     # вьюшка для удаления продукта
     def delete(self, request, perm='Users.delete_product'):

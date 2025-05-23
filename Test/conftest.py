@@ -1,5 +1,6 @@
 import pytest
 from django.contrib.auth.models import Group
+from Products.models import Product, Category, Cart, CartProduct
 from Users.models import MarketUser, UserGroup
 
 @pytest.fixture
@@ -68,7 +69,7 @@ def authenticated_buyer_client(api_client, buyer_user):
 
 @pytest.fixture
 def authenticated_seller_client(api_client, seller_user):
-    api_client.post(path=reversed('login'), data={'username': 'seller_user.username', 'password': 'seller_user.password'}, format='json')
+    api_client.force_authenticate(user=seller_user)
     session = api_client.session
     session['user_id'] = seller_user.id
     session['user_type'] = seller_user.user_type
@@ -78,13 +79,34 @@ def authenticated_seller_client(api_client, seller_user):
 
 @pytest.fixture
 def authenticated_admin_client(api_client, admin_user):
-    api_client.post(path=reversed('login'), data={'username': 'admin_user.username', 'password': 'admin_user.password'}, format='json')
+    api_client.force_authenticate(user=admin_user)
     session = api_client.session
     session['user_id'] = admin_user.id
     session['user_type'] = admin_user.user_type
     session['username'] = admin_user.username
     session.save()
     return api_client
+
+
+@pytest.fixture
+def product(seller_user):
+    return Product.objects.create(
+        name="Test Product",
+        price=100.00,
+        description="Test Description",
+        quantity=10,
+        seller=seller_user
+    )
+
+@pytest.fixture
+def category(db):
+    return Category.objects.create(name="Test Category")
+
+@pytest.fixture
+def cart(buyer_user):
+    return Cart.objects.create(user=buyer_user)
+
+
 
 
 __all__ = [
@@ -98,4 +120,7 @@ __all__ = [
     'authenticated_buyer_client',
     'authenticated_seller_client',
     'authenticated_admin_client',
+    'product',
+    'category',
+    'cart'
 ]

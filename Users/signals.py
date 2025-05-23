@@ -26,8 +26,8 @@ def create_initial_groups(sender, **kwargs):
                             ]
     # права продавца
     seller_permissions = [  'add_product', 'change_good', 'delete_good', 'view_good',
-                            'change_password',
-                            'get_category', 'view_orders', 'update_order_status', 
+                            'change_password', 'get_category', 'view_orders', 'update_order_status',
+                            'update_product', 'delete_product', 
                             "delete_self"
                             ]
     # права покупателя  

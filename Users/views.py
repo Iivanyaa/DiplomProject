@@ -187,14 +187,18 @@ class DeleteUserDataView(APIView):
 class GetUserDataView(APIView):
     def get(self, request, perm='Users.get_user_data'):
         # Создаем объект сериализатора, передаем ему данные из запроса
-        serializer = GetUserDataSerializer(data=request.data)
+        print(request.query_params)
+        serializer = GetUserDataSerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
-        
+        print(serializer.validated_data)
+        print(serializer.is_valid())
         # получаем ID пользователя из запроса, если он не указан, то используем ID из сессии
         user_id = serializer.validated_data.get('id') or request.session.get('user_id')
         print(user_id, request.session.get('user_id'))
+        print(request.session.get('user_id'))
+        print(request.session)
         # проверяем наличия прав на получение данных другого пользователя
-        if user_id != request.session.get('user_id') and not MarketUser.AccessCheck(self, request=request, perm=perm):
+        if request.session.get('user_id') is None or user_id != request.session.get('user_id') and not MarketUser.AccessCheck(self, request=request, perm=perm):
             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED , content_type='application/json')
         # проверяем наличие пользователя
         if not MarketUser.objects.filter(id=user_id).exists():
@@ -220,7 +224,7 @@ class RestorePasswordView(APIView):
             # Получаем объект пользователя по электронному адресу
             try:
                 user = MarketUser.objects.get(email=serializer.validated_data['email'])
-            except user.DoesNotExist:
+            except MarketUser.DoesNotExist:
                 return Response({'message': 'Пользователь с таким электронным адресом не найден'}, status=status.HTTP_404_NOT_FOUND)
             #Генерируем новый пароль
             new_password = generate_secure_password()

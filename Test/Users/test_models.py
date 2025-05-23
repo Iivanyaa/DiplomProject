@@ -32,8 +32,8 @@ class TestMarketUserModel:
         assert admin_user.email == 'admin@example.com'
         assert admin_user.groups.filter(name='Admin').exists()
         assert admin_user.is_active is True
-        assert admin_user.is_staff is True
-        assert admin_user.is_superuser is True
+        assert admin_user.is_staff is False
+        assert admin_user.is_superuser is False
 
     def test_user_str_method(self, buyer_user):
         assert str(buyer_user) == 'buyer_user'

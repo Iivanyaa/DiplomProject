@@ -78,6 +78,27 @@ class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True)
 
+    def validate(self, attrs):
+        # Получаем все ключи из исходных данных
+        received_keys = set(self.initial_data.keys())
+        # Получаем ключи, объявленные в сериализаторе
+        allowed_keys = set(self.fields.keys())
+        # Находим неизвестные ключи
+        unknown_keys = received_keys - allowed_keys
+        # Проверяем наличие неизвестных ключей
+        if unknown_keys:
+            raise ValidationError(
+                f"Недопустимые поля: {', '.join(unknown_keys)}. "
+                f"Допустимые поля: {', '.join(allowed_keys)}."
+            )
+        
+        attrs = super().validate(self.initial_data)
+        if not attrs.get('old_password') or not attrs.get('new_password'):
+            raise ValidationError("Укажите old_password и new_password.")
+        if attrs.get('old_password') == attrs.get('new_password'):
+            raise ValidationError("Новый пароль должен отличаться от старого.")
+        return attrs
+
     
 
 # Сериализатор для удаления пользователя
@@ -166,15 +187,10 @@ class DeleteUserDataSerializer(serializers.Serializer):
         
         return attrs
 
-# Сериализатор для восстановления пароля
+#Сериализатор для восстановления пароля
 class RestorePasswordSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
 
-    def validate(self, attrs):
-        # Проверяем, существует ли пользователь с данным электронным адресом
-        if not MarketUser.objects.filter(email=attrs['email']).exists():
-            raise serializers.ValidationError("Пользователь с таким электронным адресом не найден.")
-        return attrs
     
 
 class ViewUsernameSerializer(serializers.ModelSerializer):

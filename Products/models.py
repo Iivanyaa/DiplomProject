@@ -19,10 +19,23 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField()
     quantity = models.PositiveIntegerField()
-    is_available = models.BooleanField(default=True)
+    is_available = models.BooleanField(
+        default=True,
+        help_text="Указывает, доступен ли продукт для покупки",
+        auto_created=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     seller = models.ForeignKey('Users.MarketUser', on_delete=models.CASCADE, null=True, related_name='products')
+
+    def save(self, *args, **kwargs):
+        """
+        переопределенный метод save, который при изменении quantity до 0
+        изменяет is_available на False
+        """
+        if self.quantity == 0:
+            self.is_available = False
+        super().save(*args, **kwargs)
 
     def __str__(self):
         """

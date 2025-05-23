@@ -5,7 +5,7 @@ Content-Type: application/json
 {
   "email": "Kozmaivan2013@gmail.com",
   "password": "11111",
-  "username": "Mamba",
+  "username": "Shabolda",
   "user_type": "Admin"
 }
 
@@ -15,7 +15,7 @@ POST http://127.0.0.1:8000/api/login/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "username": "Mamba",
+  "username": "Shabolda",
   "password": "11111"
 }
 
@@ -49,8 +49,8 @@ PUT http://127.0.0.1:8000/api/update_user/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "first_name": "Halloa",
-  "last_name": "Allohao",
+  "first_name": "Shabolda",
+  "last_name": "Mamba",
   "phone_number": "+7(923)803-02-25"
 }
 
@@ -71,7 +71,7 @@ Content-Type: application/json
 Data: json
 
 {
-  "id": 3
+  "id": 4
 }
 
 ###восстановление пароля через электронную почту
@@ -92,7 +92,7 @@ Content-Type: application/json
   "price": "36",
   "description": "Вкусно",
   "quantity": 43,
-  "categories": [3]
+  "categories": [1]
 }
 
 ### получение продукта по id или названию
@@ -140,7 +140,7 @@ POST http://127.0.0.1:8000/api/Categories/ HTTP/1.1
 Content-Type: application/json
 
 {
-  "name": "Напитки"
+  "name": "Сухареки"
 }
 
 ###получение списка категорий или по id или названию
@@ -148,7 +148,7 @@ GET http://127.0.0.1:8000/api/Categories/ HTTP/1.1
 Content-Type: application/json
 
 {
- "id": 3
+ 
 }
 
 ###получение корзины

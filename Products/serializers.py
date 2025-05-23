@@ -51,8 +51,8 @@ class ProductSearchSerializer(serializers.Serializer):
         #     raise ValidationError("Укажите id или name для поиска.")
 
         # Проверяем, что не передано более одного параметра
-        if len([key for key, value in attrs.items() if value is not None]) > 1:
-            raise ValidationError('Укажите только один параметр')
+        # if len([key for key, value in attrs.items() if value is not None]) > 1:
+        #     raise ValidationError('Укажите только один параметр')
         
         return attrs
     
@@ -98,7 +98,7 @@ class ProductUpdateSerializer(serializers.Serializer):
     price = serializers.DecimalField(required=False, allow_null=True, max_digits=10, decimal_places=2)
     description = serializers.CharField(required=False, allow_blank=True)
     quantity = serializers.IntegerField(required=False, allow_null=True)
-    is_available = serializers.BooleanField(required=False, allow_null=True)
+    is_available = serializers.BooleanField(required=False, default=True)
     name = serializers.CharField(required=False, allow_blank=True)
     def validate(self, data):
         # Получаем все ключи из исходных данных
@@ -123,7 +123,7 @@ class ProductUpdateSerializer(serializers.Serializer):
 
 class CategorySerializer(serializers.Serializer):
     id = serializers.IntegerField(required=False, allow_null=True)
-    name = serializers.CharField(required=True, allow_blank=False)
+    name = serializers.CharField(required=False, allow_blank=False)
 
     def validate(self, data):
         # Получаем все ключи из исходных данных
@@ -139,6 +139,9 @@ class CategorySerializer(serializers.Serializer):
                 f"Допустимые поля: {', '.join(allowed_keys)}."
             )
         attrs = super().validate(data)
+        # проверка на вхождение хотябы 1 значения
+        if not attrs.get('id') and not attrs.get('name'):
+            raise ValidationError("Укажите id или name для поиска.")
         return attrs
 
 class CategorySearchSerializer(CategorySerializer):

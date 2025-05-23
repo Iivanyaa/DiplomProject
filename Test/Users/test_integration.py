@@ -33,7 +33,7 @@ class TestUserWorkflow:
             'phone_number': '+1234567890'
         }
         # Для аутентификации используем force_authenticate, так как сессии не работают в тестах с APIClient
-        from .models import MarketUser
+        from Users.models import MarketUser
         user = MarketUser.objects.get(username='workflow_user')
         api_client.force_authenticate(user=user)
         
@@ -42,13 +42,11 @@ class TestUserWorkflow:
         
         # 4. Получение данных пользователя
         get_data_url = reverse('Get_User')
-        get_data_data = {
-            'user_id': user.id
-        }
-        get_data_response = api_client.get(get_data_url, get_data_data, format='json')
+      
+        get_data_response = api_client.get(get_data_url, format='json')
         assert get_data_response.status_code == status.HTTP_200_OK
-        assert get_data_response.data['first_name'] == 'Workflow'
-        assert get_data_response.data['last_name'] == 'User'
+        assert get_data_response.data['данные пользователя']['first_name'] == 'Workflow'
+        assert get_data_response.data['данные пользователя']['last_name'] == 'User'
         
         # 5. Смена пароля
         change_password_url = reverse('change_password')

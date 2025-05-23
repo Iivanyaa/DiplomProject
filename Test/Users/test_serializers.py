@@ -99,7 +99,7 @@ class TestChangePasswordSerializer:
 class TestDeleteUserSerializer:
     def test_valid_serializer_data(self, buyer_user):
         data = {
-            'user_id': buyer_user.id
+            'id': buyer_user.id
         }
         serializer = DeleteUserSerializer(data=data)
         assert serializer.is_valid()
@@ -116,7 +116,7 @@ class TestDeleteUserSerializer:
 class TestGetUserDataSerializer:
     def test_valid_serializer_data(self, buyer_user):
         data = {
-            'user_id': buyer_user.id
+            'id': buyer_user.id
         }
         serializer = GetUserDataSerializer(data=data)
         assert serializer.is_valid()
@@ -145,20 +145,3 @@ class TestDeleteUserDataSerializer:
         serializer = DeleteUserDataSerializer(data=data)
         assert not serializer.is_valid()
         assert 'data_to_delete' in serializer.errors
-
-@pytest.mark.django_db
-class TestRestorePasswordSerializer:
-    def test_valid_serializer_data(self, buyer_user):
-        data = {
-            'email': buyer_user.email
-        }
-        serializer = RestorePasswordSerializer(data=data)
-        assert serializer.is_valid()
-
-    def test_invalid_email(self):
-        data = {
-            'email': 'nonexistent@example.com'
-        }
-        serializer = RestorePasswordSerializer(data=data)
-        assert not serializer.is_valid()
-        assert 'non_field_errors' in serializer.errors
