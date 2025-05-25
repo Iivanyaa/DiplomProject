@@ -1,6 +1,6 @@
 import pytest
-from django.contrib.auth.models import Group, Permission
-from Orders.models import Order, OrderProduct, SellerOrder
+import requests
+from django.contrib.auth.models import Group
 from Products.models import Product, Category, Cart, CartProduct
 from Users.models import MarketUser, UserGroup
 
@@ -107,25 +107,6 @@ def category(db):
 def cart(buyer_user):
     return Cart.objects.create(user=buyer_user)
 
-@pytest.fixture
-def order(buyer_user):
-    return Order.objects.create(user=buyer_user, total_price=100.00)
-
-@pytest.fixture
-def order_product(order, product, buyer_user, seller_user):
-    return OrderProduct.objects.create(
-        order=order,
-        product=product,
-        quantity=2,
-        buyer=buyer_user,
-        seller=seller_user,
-        status='New'
-    )
-
-@pytest.fixture
-def seller_order(order, seller_user):
-    return SellerOrder.objects.create(order=order, seller=seller_user)
-
 
 
 
@@ -142,8 +123,5 @@ __all__ = [
     'authenticated_admin_client',
     'product',
     'category',
-    'cart',
-    'order',
-    'order_product',
-    'seller_order'
+    'cart'
 ]

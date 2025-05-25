@@ -1,0 +1,10 @@
+[run]
+omit =
+    */tests/*
+    */migrations/*
+    */__init__.py*
+    */.venv*
+    */Market*
+    */Example*
+    *.env*
+    *requirements*

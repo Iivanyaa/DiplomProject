@@ -25,6 +25,12 @@ class OrderProduct(models.Model):
     buyer = models.ForeignKey('Users.MarketUser', on_delete=models.SET_NULL, null=True, related_name='order_products_buyer')
     seller = models.ForeignKey('Users.MarketUser', on_delete=models.SET_NULL, null=True, related_name='order_products_seller')
     status = models.CharField(max_length=255, choices=ORDER_STATUS, default='New')
+    def cancel_order(self):
+        for order_product in self.objects.all():
+            order_product.product.quantity += order_product.quantity
+            order_product.product.save()
+        self.status = 'Canceled'
+        self.save()
 
 
 class SellerOrder(models.Model):

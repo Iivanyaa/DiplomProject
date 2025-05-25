@@ -10,19 +10,17 @@ from rest_framework import status
 class OrderView(APIView):
     # вьюшка для просмотра всех заказов текущего пользователя для Buyer и Seller либо по id
     def get(self, request, perm='Users.view_orders'):
-        serializer = OrderSearchSerializer(data=request.data)
+        serializer = OrderSearchSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
         #проверяемие наличие прав у пользователя
         if not MarketUser.AccessCheck(self, request, perm):
             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
-        # проверяем валидность входных данных
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         # полчаем экземпляр пользователя
         user = MarketUser.objects.get(id=request.session.get('user_id'))
-        print(user.user_type)
         orders_list = None
         # если не переданы данные, выводим список всех продуктов
-        if serializer.validated_data.keys() == set():
+        # Проверяем, что валидация данных не содержит никаких ключей
+        if  serializer.validated_data == {} or serializer.validated_data == None:
             if user.user_type == 'Buyer':
                 orders_list = user.order_products_buyer.all()
             if user.user_type == 'Seller':
@@ -33,19 +31,19 @@ class OrderView(APIView):
                              'orders': OrderProductSerializer(orders_list, many=True).data
                              }, status=status.HTTP_200_OK)
         # если переданы данные, выводим список заказов по id
-        else:
-            if user.user_type == 'Buyer':
-                orders_list = user.order_products_buyer.filter(**serializer.validated_data)
-            if user.user_type == 'Seller':
-                orders_list = user.order_products_seller.filter(**serializer.validated_data)
-            if user.user_type == 'Admin':
-                orders_list = OrderProduct.objects.filter(**serializer.validated_data)
-            if not orders_list.exists():
-                return Response({'message': 'Заказы не найдены'}, status=status.HTTP_404_NOT_FOUND)
-            return Response({'message': 'Заказы найдены',
-                             'orders': OrderProductSerializer(orders_list, many=True).data
-                             }, status=status.HTTP_200_OK)
-    
+        try:
+            order_product = OrderProduct.objects.get(id=serializer.validated_data['id'])
+        except OrderProduct.DoesNotExist:
+            return Response({'message': 'Заказ не найден'}, status=status.HTTP_404_NOT_FOUND)
+        if user.user_type == 'Buyer':
+            orders_list = user.order_products_buyer.filter(**serializer.validated_data)
+        if user.user_type == 'Seller':
+            orders_list = user.order_products_seller.filter(**serializer.validated_data)
+        if user.user_type == 'Admin':
+            orders_list = OrderProduct.objects.filter(**serializer.validated_data)
+        return Response({'message': 'Заказ найден',
+                            'orders': OrderProductSerializer(orders_list, many=True).data
+                            }, status=status.HTTP_200_OK)
     # вьюшка для изменения статуса заказа по id
     def put(self, request, perm='Users.update_order_status'):
         serializer = OrderStatusUpdateSerializer(data=request.data)
@@ -56,19 +54,18 @@ class OrderView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         # изменяем статус заказа
-        order = OrderProduct.objects.get(id=serializer.validated_data['id'])
-        if order.status == str(serializer.validated_data['status']):
+        order_product = OrderProduct.objects.get(id=serializer.validated_data['id'])
+        if order_product.status == str(serializer.validated_data['status']):
             return Response({'message': 'Статус заказа не изменился'}, status=status.HTTP_400_BAD_REQUEST)
-        order.status = str(serializer.validated_data['status'])
-        order.save()
-        if order.status == 'Canceled':
-            for order_product in order.order.order_products.all():
-                order_product.product.quantity += order_product.quantity
-                order_product.product.save()
-                order_product.delete()
+        order_product.status = str(serializer.validated_data['status'])
+        order_product.save()
+        if order_product.status == 'Canceled':
+            order_product.product.quantity += order_product.quantity
+            order_product.product.save()
+            order_product.delete()
         return Response({'message': 'Статус заказа успешно изменен',
-                         'order': order.id,
-                         'status': order.status}, status=status.HTTP_200_OK)
+                         'order_product': order_product.id,
+                         'status': order_product.status}, status=status.HTTP_200_OK)
 
     
     

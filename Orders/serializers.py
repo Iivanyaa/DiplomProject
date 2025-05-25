@@ -40,7 +40,7 @@ class OrderProductSerializer(serializers.Serializer):
     product = serializers.CharField(required=True)
     buyer = serializers.CharField(required=True)
     seller = serializers.CharField(required=True)
-    quantity = serializers.IntegerField(required=True)
+    quantity = serializers.IntegerField(required=True, min_value=0)
     status = serializers.CharField(required=False, allow_null=True)
     id = serializers.IntegerField(required=False, allow_null=True)
 
