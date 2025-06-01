@@ -18,7 +18,11 @@ class Product(models.Model):
     name = models.CharField(max_length=255)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField()
-    quantity = models.PositiveIntegerField()
+    quantity = models.PositiveIntegerField(
+        help_text="Количество продуктов в наличии у продавца",
+        default=1,
+        auto_created=True
+    )
     is_available = models.BooleanField(
         default=True,
         help_text="Указывает, доступен ли продукт для покупки",

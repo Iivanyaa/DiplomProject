@@ -1,23 +1,38 @@
 from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes,
+                                    OpenApiExample, inline_serializer, OpenApiResponse)
 from Orders.models import Order, OrderProduct
 from Users.models import MarketUser
 from Users.serializers import UserSerializer, ViewUsernameSerializer
-from .serializers import (ProductSerializer, ProductSearchSerializer, ProductAddToCartSerializer, ProductUpdateSerializer,
-                          CategorySerializer, CategorySearchSerializer, CategoryGetSerializer, CategoryUpdateSerializer,
-                          ProductAddSerializer, ProductsListSerializer, CartProductSearchSerializer)
+from .serializers import *
 from .models import Product, Category, Cart, CartProduct
-from rest_framework import status
+from rest_framework import status, serializers
 from django.core.mail import send_mail
 import os
+from .schema import *
 
-
-# вьюшка для обработки запросов к продуктам
+# Документация для ProductsView
+@products_list_schema
 class ProductsView(APIView):
     # вьюшка для просмотра всех продуктов, либо если введены id, name или категория
+    
     def get(self, request):
+        """
+        GET-запрос на просмотр продуктов.
+
+        Параметры:
+        id (int): идентификатор продукта
+        name (str): название продукта
+        categories (list): список идентификаторов категорий
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном поиске
+            продуктов, если такие продукты существуют, или сообщение
+            об ошибке, если продукты не найдены.
+        """
+        
         serializer = ProductSearchSerializer(data=request.data)
 
         if not serializer.is_valid():
@@ -52,8 +67,21 @@ class ProductsView(APIView):
     
     # вьюшка для создания продукта
     def post(self, request, perm='Users.add_product'):
+        """
+        POST-запрос на создание продукта.
+
+        Параметры:
+        request (Request): объект запроса Django
+        perm (str): права, необходимые для создания продукта (по умолчанию 'Users.add_product')
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном создании
+            продукта, если такие права есть, или сообщение
+            об ошибке, если таких прав нет.
+        """
         serializer = ProductSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid:
+            return Response(serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         if not MarketUser.AccessCheck(self, request, perm):
             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -86,6 +114,17 @@ class ProductsView(APIView):
         }, status=status.HTTP_201_CREATED)
     # вьюшка для изменения продукта
     def put(self, request):
+        """
+        PUT-запрос на изменение продукта.
+
+        Параметры:
+        request (Request): объект запроса Django
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном изменении
+            продукта, если такие права есть, или сообщение
+            об ошибке, если таких прав нет.
+        """
         serializer = ProductUpdateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -122,6 +161,18 @@ class ProductsView(APIView):
              }, status=status.HTTP_200_OK)
     # вьюшка для удаления продукта
     def delete(self, request, perm='Users.delete_product'):
+        """
+        DELETE-запрос на удаление продукта.
+
+        Параметры:
+        request (Request): объект запроса Django
+        perm (str): права, необходимые для удаления продукта (по умолчанию 'Users.delete_product')
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном удалении
+            продукта, если такие права есть, или сообщение
+            об ошибке, если таких прав нет.
+        """
         serializer = ProductSearchSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -145,11 +196,24 @@ class ProductsView(APIView):
     
     # вьюшка для добавления продукта в корзину
     def patch(self, request, perm='Users.add_to_cart'):
+        """
+        PATCH-запрос на добавление продукта в корзину.
+
+        Параметры:
+        request (Request): объект запроса Django
+        perm (str): права, необходимые для добавления продукта в корзину (по умолчанию 'Users.add_to_cart')
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном добавлении
+            продукта в корзину, если такие права есть, или сообщение
+            об ошибке, если таких прав нет.
+        """
+
         serializer = ProductAddToCartSerializer(data=request.data)
         
         # проверяем валидность данных
         if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
                             
         # проверяем наличие прав пользователя
         if not MarketUser.AccessCheck(self, request, perm):
@@ -190,10 +254,24 @@ class ProductsView(APIView):
             'quantity': cart_product.quantity
         }, status=status.HTTP_200_OK)
 
-# вьюшка для обработки запросов к категориям
+
+# Документация для CategoriesView
+@categories_view_schema
 class CategoriesView(APIView):
     # создание категории
     def post(self, request, perm='Users.create_category'):
+        """
+        POST-запрос на создание категории.
+
+        Параметры:
+        request (Request): объект запроса Django
+        perm (str): права, необходимые для создания категории (по умолчанию 'Users.create_category')
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном создании
+            категории, если такие права есть, или сообщение
+            об ошибке, если таких прав нет.
+        """
         serializer = CategorySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         # проверяем имеет ли пользователь право на создание категории
@@ -208,6 +286,18 @@ class CategoriesView(APIView):
         return Response({'message': 'Категория успешно создана', **serializer.data}, status=status.HTTP_201_CREATED)
     # удаление категории
     def delete(self, request, perm='Users.delete_category'):
+        """
+        DELETE-запрос на удаление категории.
+
+        Параметры:
+        request (Request): объект запроса Django
+        perm (str): права, необходимые для удаления категории (по умолчанию 'Users.delete_category')
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном удалении
+            категории, если такие права есть, или сообщение
+            об ошибке, если таких прав нет.
+        """
         serializer=CategorySearchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         # проверяем имеет ли пользователь право на удаление категории
@@ -221,6 +311,18 @@ class CategoriesView(APIView):
         category = Category.objects.filter(**serializer.validated_data).delete()
         return Response({"message":"Категория успешно удалена"}, status=status.HTTP_200_OK)
     def put(self, request, perm='Users.update_category'):
+        """
+        PUT-запрос на изменение категории.
+
+        Параметры:
+        request (Request): объект запроса Django
+        perm (str): права, необходимые для изменения категории (по умолчанию 'Users.update_category')
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном изменении
+            категории, если такие права есть, или сообщение
+            об ошибке, если таких прав нет.
+        """
         serializer=CategoryUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         # проверяем имеет ли пользователь право на изменение категории
@@ -240,6 +342,18 @@ class CategoriesView(APIView):
             {"message": "Категория успешно изменена"}, status=status.HTTP_200_OK)
     # вьюшка для порлучения списка категорий либо категории по id или названию
     def get(self, request, perm='Users.get_category'):
+        """
+        Вьюшка для получения категории по id или имени, либо получения всех категорий,
+        если id или имя не указаны.
+
+        Параметры:
+        request (Request): объект запроса Django
+        perm (str): разрешение, необходимое для получения категории
+
+        Возвращает:
+        Response: объект ответа с данными категории, если категория найдена,
+            или сообщение об ошибке, если категория не найдена
+        """
         serializer = CategoryGetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         # проверяем имеет ли пользователь право на получение категории
@@ -257,9 +371,24 @@ class CategoriesView(APIView):
         # если категория найдена, возвращаем ее
         category = categories.first()
         return Response({'message': 'Категория найдена', 'id': category.id, 'name': category.name}, status=status.HTTP_200_OK)
-    
+
+
+# Документация для CartView
+@cart_view_schema
 class CartView(APIView):
     def get(self, request, perm='Users.view_cart'):
+        """
+        Получить корзину пользователя.
+
+        Параметры:
+        request (Request): объект запроса Django
+        perm (str): требуемое разрешение для получения корзины
+
+        Возвращает:
+        Response: объект ответа с данными корзины, если пользователь имеет
+            необходимые права, или сообщение об ошибке, если пользователь не
+            имеет необходимых прав.
+        """
         # проверяем имеет ли пользователь право на получение корзины
         if not MarketUser.AccessCheck(self, request, perm):
             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
@@ -288,6 +417,10 @@ class CartView(APIView):
         }, status=status.HTTP_200_OK)
 
     def delete(self, request, perm='Users.delete_product_from_cart'):
+        """
+        Удаляет продукт из корзины пользователя.
+
+        """
         serializer = CartProductSearchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         # проверяем имеет ли пользователь право на удаление товаров из корзины
@@ -309,9 +442,21 @@ class CartView(APIView):
         return Response({"message": "Товар не находится в корзине"}, status=status.HTTP_400_BAD_REQUEST)
 
     def put(self, request, perm='Users.update_product_in_cart'):
+        """
+        Обновляет продукт в корзине пользователя.
+
+        Параметры:
+        serializer (ProductAddToCartSerializer): сериализатор данных запроса
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном обновлении товара в
+            корзине, если пользователь имеет необходимые права и товар
+            находится в корзине, или сообщение об ошибке, если товар не
+            найден или нет прав на обновление.
+        """
         serializer = ProductAddToCartSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # проверяем имеет ли пользователь право на изменение товаров в корзине
+        # проверяем имеет ли пользователь право на обновление товаров в корзине
         if not MarketUser.AccessCheck(self, request, perm):
             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
         # ищем товар по id или названию
@@ -330,6 +475,17 @@ class CartView(APIView):
         return Response({"message": "Товар не находится в корзине"}, status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request, perm='Users.order'):
+        """
+        Оформляет заказ.
+
+        Параметры:
+        request (Request): объект запроса Django
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном оформлении заказа,
+            если пользователь имеет необходимые права, или сообщение об ошибке,
+            если пользователь не имеет необходимых прав.
+        """
         # проверяем имеет ли пользователь право на оформление заказа
         if not MarketUser.AccessCheck(self, request, perm):
             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)

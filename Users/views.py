@@ -1,5 +1,6 @@
 import os
 from rest_framework import status
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample, OpenApiParameter, OpenApiTypes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .serializers import DeleteUserSerializer, RestorePasswordSerializer, UserRegSerializer, DeleteUserDataSerializer, GetUserDataSerializer, LoginSerializer, ChangePasswordSerializer, UserUpdateSerializer
@@ -8,16 +9,26 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.mail import send_mail
 from .utils import generate_secure_password
+from .schema import *
 
 
 # Регистрация покупателя по логину, почте и паролю
+@user_register_schema
 class UserRegisterView(APIView):
-    """
-    POST: Регистрация пользователя
-    """
     def post(self, request):
         # Создаем объект serializer, передаем ему данные из запроса
-        serializer = UserRegSerializer(data=request.data)
+        """
+        POST-запрос на регистрацию пользователя.
+
+        Параметры:
+        request (Request): объект запроса Django
+
+        Возвращает:
+        Response: объект ответа с созданным пользователем, если данные валидны,
+            или сообщение об ошибке, если данные не валидны.
+        """
+
+        serializer_reg = UserRegSerializer(data=request.data)
         # Проверяем, валидны ли данные
         if serializer.is_valid():
             # если данные валидны, то создаем пользователя
@@ -30,11 +41,23 @@ class UserRegisterView(APIView):
         # если данные не валидны, то возвращаем ошибки
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 # логин пользователя
+@user_login_schema
 class LoginView(APIView):
     def post(self, request):
         # создаем объект serializer, передаем ему данные из запроса
+        """
+        POST-запрос на аутентификацию пользователя.
+
+        Параметры:
+        request (Request): объект запроса Django
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешной аутентификации,
+            если данные валидны и аутентификация прошла успешно,
+            или сообщение об ошибке, если данные не валидны
+            или аутентификация прошла неудачно.
+        """
         serializer = LoginSerializer(data=request.data)
         # если объект serializer валидный, то
         if serializer.is_valid(raise_exception=True):
@@ -51,18 +74,44 @@ class LoginView(APIView):
         return Response({'message': 'неверные данные'}, status=status.HTTP_400_BAD_REQUEST)
 
 # выход пользователя из системы
+@user_logout_schema
 class LogoutView(APIView):
     def post(self, request):
         # удаляем пользователя из сессии
+        """
+        POST-запрос на выход пользователя из системы.
+
+        Параметры:
+        request (Request): объект запроса Django
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном выходе,
+            если пользователь аутентифицирован,
+            или сообщение об ошибке, если пользователь не аутентифицирован
+        """
         request.session.flush()
         # возвращаем ответ, что аутентификация прошла успешно
         return Response({'message': 'Успешный выход'}, status=status.HTTP_200_OK)
-    
 
 # Изменение пароля пользователя
+@user_change_password_schema
 class ChangePasswordView(APIView):
     def post(self, request):
         # Получаем текущего пользователя из сессии
+        """
+        POST-запрос на изменение пароля пользователя.
+
+        Параметры:
+        request (Request): объект запроса Django
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном изменении пароля,
+            если пользователь аутентифицирован и имеет необходимые права,
+            или сообщение об ошибке, если пользователь не аутентифицирован,
+            не имеет прав, старый пароль неверный, или новый пароль совпадает
+            со старым. Также возвращает ошибки, если данные не валидны.
+        """
+
         user_id = request.session.get('user_id')
         if not user_id:
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -91,9 +140,21 @@ class ChangePasswordView(APIView):
     
 
 # Удаление пользователя
+@delete_user_schema
 class DeleteUserView(APIView):
     def delete(self, request):
         # создаем объект serializer, передаем ему данные из запроса
+        """
+        DELETE-запрос на удаление пользователя.
+
+        Параметры:
+        request (Request): объект запроса Django
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном удалении
+            пользователя, если пользователь имеет необходимые права, или
+            сообщение об ошибке, если таких прав нет.
+        """
         serializer = DeleteUserSerializer(data=request.data)
         # проверяем, есть ли в запросе id пользователя или username
         if 'id' not in request.data and 'username' not in request.data:
@@ -120,8 +181,22 @@ class DeleteUserView(APIView):
 
 
 # Изменение данных пользователя
+@update_user_data_schema
 class UpdateUserView(APIView):
     def put(self, request, perm='Users.update_user'):
+        """
+        PUT-запрос на изменение данных пользователя.
+
+        Параметры:
+        request (Request): объект запроса Django
+
+        Возвращает:
+        Response: объект ответа с обновленными данными
+            пользователя, если пользователь аутентифицирован и
+            имеет необходимые права, или сообщение об ошибке,
+            если пользователь не аутентифицирован, не имеет
+            прав, или ID пользователя не найден.
+        """
         serializer = UserUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         # проверяем аутентифицирован ли пользователь
@@ -150,9 +225,25 @@ class UpdateUserView(APIView):
 
 
 # удаление данных пользователя
+@delete_user_data_schema
 class DeleteUserDataView(APIView):
     def delete(self, request, perm='Users.delete_user_data'):
         # проверяем аутентифицирован ли пользователь
+        """
+        Удаляет выбранные данные пользователя на основе предоставленных данных.
+
+        Параметры:
+        request (Request): объект запроса Django
+        perm (str): требуемое разрешение для удаления данных пользователя
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном удалении данных, если
+            пользователь аутентифицирован, имеет необходимые права и данные
+            пользователя существуют. В противном случае возвращает сообщение
+            об ошибке, если пользователь не аутентифицирован, не имеет прав,
+            или данные пользователя не найдены.
+        """
+
         if request.session.get('user_id') is None:
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
         # Получаем ID пользователя из запроса, если он не указан, то используем ID из сессии
@@ -184,9 +275,24 @@ class DeleteUserDataView(APIView):
     
 
 # получение данных пользователя по ID
+@get_user_data_schema
 class GetUserDataView(APIView):
     def get(self, request, perm='Users.get_user_data'):
         # Создаем объект сериализатора, передаем ему данные из запроса
+        """
+        GET-запрос на получение данных пользователя.
+
+        Параметры:
+        request (Request): объект запроса Django
+        perm (str): требуемое разрешение для получения данных пользователя
+
+        Возвращает:
+        Response: объект ответа с данными пользователя, если пользователь
+            аутентифицирован, имеет необходимые права и пользователь
+            существует. В противном случае возвращает сообщение об ошибке,
+            если пользователь не аутентифицирован, не имеет прав, или
+            пользователь не найден.
+        """
         print(request.query_params)
         serializer = GetUserDataSerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
@@ -215,9 +321,22 @@ class GetUserDataView(APIView):
 
 
 # восстановление пароля по электроронному адресу
+@restore_password_schema
 class RestorePasswordView(APIView):
     def post(self, request):
         # Создаем объект сериализатора, передаем ему данные из запроса
+        """
+        POST-запрос на восстановление пароля пользователя по его электронному адресу.
+
+        Параметры:
+        request (Request): объект запроса Django, содержащий электронный адрес пользователя.
+
+        Возвращает:
+        Response: объект ответа с сообщением об успешном изменении пароля, если
+            пользователь с указанным электронным адресом существует. В противном
+            случае возвращает сообщение об ошибке, если пользователь не найден.
+        """
+
         serializer = RestorePasswordSerializer(data=request.data)
         # Проверяем, валидны ли данные
         if serializer.is_valid(raise_exception=True):

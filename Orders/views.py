@@ -1,15 +1,39 @@
 from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from drf_spectacular.utils import (
+    extend_schema, 
+    extend_schema_view,
+    OpenApiParameter,
+    OpenApiTypes,
+    OpenApiResponse,
+    OpenApiExample
+)
 from Orders.models import Order, OrderProduct
 from Orders.serializers import OrderProductSerializer, OrderSearchSerializer, OrderStatusUpdateSerializer
 from Users.models import MarketUser
 from rest_framework import status
+from Orders.schema import order_list_schema
 
+
+@order_list_schema
 class OrderView(APIView):
     # вьюшка для просмотра всех заказов текущего пользователя для Buyer и Seller либо по id
     def get(self, request, perm='Users.view_orders'):
+        """
+        Если передан id, то отображает заказ по id. 
+        В противном случае получает список заказов для текущего пользователя в зависимости от его типа 
+        пользователя и необязательных параметров поиска.
+
+        Параметры:
+        id (int): идентификатор заказа (опционально)
+
+        Возвращает:
+        Response: Объект Response, содержащий сообщение и список заказов, 
+        сериализованных с помощью OrderProductSerializer, или сообщение об ошибке, 
+        если у пользователя недостаточно прав или заказ не найден.
+        """
+
         serializer = OrderSearchSerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         #проверяемие наличие прав у пользователя
@@ -46,6 +70,16 @@ class OrderView(APIView):
                             }, status=status.HTTP_200_OK)
     # вьюшка для изменения статуса заказа по id
     def put(self, request, perm='Users.update_order_status'):
+        """
+        Вьюшка для обновления статуса заказа по id.
+
+        Параметры:
+        id (int): идентификатор заказа
+        status (str): новый статус заказа
+
+        Возвращает:
+        Ответ с сообщением и статусом заказа
+        """
         serializer = OrderStatusUpdateSerializer(data=request.data)
         # проверяемие наличие прав у пользователя
         if not MarketUser.AccessCheck(self, request, perm):
@@ -67,21 +101,3 @@ class OrderView(APIView):
                          'order_product': order_product.id,
                          'status': order_product.status}, status=status.HTTP_200_OK)
 
-    
-    
-    
-    # def get(self, request):
-    #     if 'id' in request.data:
-    #         order = Order.objects.get(id=request.data['id'])
-    #         if order.buyer.id == request.session.get('user_id'):
-    #             return Response({'message': 'Заказ найден',
-    #                              'order': OrderSerializer(order).data
-    #                              }, status=status.HTTP_200_OK)
-    #         else:
-    #             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
-    #     else:
-    #         orders = Order.objects.filter(buyer__id=request.session.get('user_id'))
-    #         return Response({'message': 'Все заказы',
-    #                          'orders': OrderSerializer(orders, many=True).data
-    #                          }, status=status.HTTP_200_OK)
-    
