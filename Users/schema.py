@@ -1,81 +1,61 @@
 from drf_spectacular.utils import (
-    extend_schema, 
-    extend_schema_view,
-    OpenApiParameter,
-    OpenApiTypes,
+    extend_schema,
     OpenApiResponse,
-    OpenApiExample
+    OpenApiExample,
+    OpenApiParameter
 )
-from Users.serializers import UserRegSerializer, LoginSerializer, ChangePasswordSerializer, DeleteUserSerializer, GetUserDataSerializer, DeleteUserDataSerializer, RestorePasswordSerializer, UserUpdateSerializer, RestorePasswordSerializer
+from drf_spectacular.types import OpenApiTypes
+from Users.serializers import (
+    UserRegSerializer,
+    LoginSerializer,
+    ChangePasswordSerializer,
+    DeleteUserSerializer,
+    GetUserDataSerializer, # Assuming this serializer is used for retrieving user data in the body if needed
+    DeleteUserDataSerializer,
+    RestorePasswordSerializer,
+    UserUpdateSerializer,
+)
 
 
 user_register_schema = extend_schema(
     tags=['Пользователи'],
     summary="Регистрация нового пользователя",
     description="Создает нового пользователя (покупателя, продавца или администратора)",
-    request=UserRegSerializer,
-    parameters=[
-        OpenApiParameter(
-            name="username",
-            description="Логин пользователя",
-            required=True,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="email",
-            description="Почта пользователя",
-            required=True,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="password",
-            description="Пароль пользователя",
-            required=True,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="user_type",
-            description="Тип пользователя",
-            required=True,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="first_name",
-            description="Имя пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="last_name",
-            description="Фамилия пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        )
-    ],
+    request=UserRegSerializer,  # Parameters are defined in UserRegSerializer
     responses={
         201: OpenApiResponse(
             description="Успешная регистрация",
             response=UserRegSerializer,
             examples=[
                 OpenApiExample(
-                    "Успешный ответ",
+                    "Пользователь успешно зарегистрирован",
                     value={
-                        "id": 1,
-                        "username": "new_user",
-                        "email": "user@example.com",
-                        "user_type": "Buyer"
+                        "message": "Пользователь успешно зарегистрирован",
+                        "data": {
+                            "email": "user@example.com",
+                            "password": "new_user",
+                            "username": "Cappucino",
+                            "first_name": "string",
+                            "last_name": "string",
+                            "phone_number": "string"
+                        }
                     }
                 )
             ]
         ),
-        400: OpenApiResponse(
+        422: OpenApiResponse(
             description="Ошибка валидации",
+            response=UserRegSerializer,
             examples=[
                 OpenApiExample(
-                    "Ошибка",
+                    "Ошибка валидации", # Corrected key from 'valuse' to 'value'
                     value={
-                        "username": ["Это поле обязательно."],
-                        "email": ["Введите правильный email."]
+                        "message": "Неверные данные",
+                        "errors": {
+                            "email": [
+                                "user with this email address already exists."
+                            ]
+                        }
                     }
                 )
             ]
@@ -87,24 +67,11 @@ user_login_schema = extend_schema(
     tags=['Пользователи'],
     summary="Аутентификация пользователя",
     description="Вход пользователя по логину и паролю",
-    request=LoginSerializer,
-    parameters=[
-        OpenApiParameter(
-            name="username",
-            description="Логин пользователя",
-            required=True,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="password",
-            description="Пароль пользователя",
-            required=True,
-            type=OpenApiTypes.STR
-        )
-    ],
+    request=LoginSerializer,  # Parameters 'username' and 'password' are expected in LoginSerializer
     responses={
         200: OpenApiResponse(
             description="Успешный вход",
+            response=LoginSerializer,
             examples=[
                 OpenApiExample(
                     "Успешный ответ",
@@ -114,6 +81,7 @@ user_login_schema = extend_schema(
         ),
         400: OpenApiResponse(
             description="Ошибка аутентификации",
+            response=LoginSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -128,9 +96,12 @@ user_logout_schema = extend_schema(
     tags=['Пользователи'],
     summary="Выход пользователя",
     description="Завершает сеанс пользователя",
+    request=None,
+    # No request body typically needed for logout
     responses={
         200: OpenApiResponse(
             description="Успешный выход",
+            response=OpenApiTypes.STR,
             examples=[
                 OpenApiExample(
                     "Успешный ответ",
@@ -145,24 +116,11 @@ user_change_password_schema = extend_schema(
     tags=['Пользователи'],
     summary="Изменение пароля",
     description="Смена пароля пользователя (требуется старый пароль)",
-    request=ChangePasswordSerializer,
-    parameters=[
-        OpenApiParameter(
-            name="old_password",
-            description="Старый пароль пользователя",
-            required=True,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="new_password",
-            description="Новый пароль пользователя",
-            required=True,
-            type=OpenApiTypes.STR
-        )
-    ],
+    request=ChangePasswordSerializer,  # 'old_password' and 'new_password' expected in ChangePasswordSerializer
     responses={
         200: OpenApiResponse(
             description="Пароль изменен",
+            response=ChangePasswordSerializer,
             examples=[
                 OpenApiExample(
                     "Успешный ответ",
@@ -172,6 +130,7 @@ user_change_password_schema = extend_schema(
         ),
         400: OpenApiResponse(
             description="Ошибка валидации",
+            response=ChangePasswordSerializer,
             examples=[
                 OpenApiExample(
                     "Неверный старый пароль",
@@ -185,6 +144,7 @@ user_change_password_schema = extend_schema(
         ),
         401: OpenApiResponse(
             description="Не авторизован",
+            response=ChangePasswordSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -194,6 +154,7 @@ user_change_password_schema = extend_schema(
         ),
         403: OpenApiResponse(
             description="Нет прав",
+            response=ChangePasswordSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -208,24 +169,24 @@ delete_user_schema = extend_schema(
     tags=['Пользователи'],
     summary="Удаление пользователя",
     description="Удаляет текущего пользователя или другого (для админов)",
-    request=DeleteUserSerializer,
-    parameters=[
-        OpenApiParameter(
-            name="id",
-            description="ID пользователя",
-            required=False,
-            type=OpenApiTypes.INT
+    request={'application/json': DeleteUserSerializer},
+    examples=[
+        OpenApiExample(
+            "Удаление текущего пользователя",
+            value={"id": 1},
+            status_codes=['200'],
+            summary="Удаление текущего пользователя",
+            description="Удаление текущего пользователя (требуются права delete_user)",
         ),
-        OpenApiParameter(
-            name="username",
-            description="Username пользователя",
-            required=False,
-            type=OpenApiTypes.STR
+        OpenApiExample(
+            "Удаление другого пользователя",
+            value={"id": 2}
         )
     ],
     responses={
         200: OpenApiResponse(
             description="Пользователь удален",
+            response=DeleteUserSerializer,
             examples=[
                 OpenApiExample(
                     "Успешный ответ",
@@ -235,6 +196,7 @@ delete_user_schema = extend_schema(
         ),
         401: OpenApiResponse(
             description="Не авторизован / Нет прав",
+            response=DeleteUserSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -249,45 +211,7 @@ update_user_schema = extend_schema(
     tags=['Пользователи'],
     summary="Обновление данных пользователя",
     description="Изменяет информацию о пользователе",
-    request=UserUpdateSerializer,
-    parameters=[
-        OpenApiParameter(
-            name="id",
-            description="ID пользователя",
-            required=False,
-            type=OpenApiTypes.INT
-        ),
-        OpenApiParameter(
-            name="username",
-            description="Username пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="email",
-            description="Email пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="first_name",
-            description="Имя пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="last_name",
-            description="Фамилия пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="phone_number",
-            description="Номер телефона пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        )
-    ],
+    request=UserUpdateSerializer,  # All update parameters are in UserUpdateSerializer
     responses={
         200: OpenApiResponse(
             description="Данные обновлены",
@@ -304,6 +228,7 @@ update_user_schema = extend_schema(
         ),
         400: OpenApiResponse(
             description="Ошибка валидации",
+            response=UserUpdateSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -313,6 +238,7 @@ update_user_schema = extend_schema(
         ),
         401: OpenApiResponse(
             description="Не авторизован",
+            response=UserUpdateSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -322,6 +248,7 @@ update_user_schema = extend_schema(
         ),
         403: OpenApiResponse(
             description="Нет прав",
+            response=UserUpdateSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -331,6 +258,7 @@ update_user_schema = extend_schema(
         ),
         404: OpenApiResponse(
             description="Пользователь не найден",
+            response=UserUpdateSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -341,49 +269,15 @@ update_user_schema = extend_schema(
     }
 )
 
+# Renamed from update_user_data_schema to avoid duplication with update_user_schema
+# This seems to be a duplicate of update_user_schema, consider if you need both.
+# If it's for a different endpoint, the name should reflect that.
+# Assuming this is intended for a separate endpoint that also updates user data.
 update_user_data_schema = extend_schema(
     tags=['Пользователи'],
     summary="Обновление данных пользователя",
     description="Изменяет информацию о пользователе",
-    request=UserUpdateSerializer,
-    parameters=[
-        OpenApiParameter(
-            name="id",
-            description="ID пользователя",
-            required=False,
-            type=OpenApiTypes.INT
-        ),
-        OpenApiParameter(
-            name="username",
-            description="Username пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="email",
-            description="Email пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="first_name",
-            description="Имя пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="last_name",
-            description="Фамилия пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        ),
-        OpenApiParameter(
-            name="phone_number",
-            description="Номер телефона пользователя",
-            required=False,
-            type=OpenApiTypes.STR
-        )
-    ],
+    request=UserUpdateSerializer, # All parameters are in UserUpdateSerializer
     responses={
         200: OpenApiResponse(
             description="Данные обновлены",
@@ -400,15 +294,19 @@ update_user_data_schema = extend_schema(
         ),
         400: OpenApiResponse(
             description="Ошибка валидации",
+            response=UserUpdateSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
-                    value={"email": ["Введите правильный email."]}
+                    value={
+                        "email": "Введите правильный email"
+                    }
                 )
             ]
         ),
         401: OpenApiResponse(
             description="Не авторизован",
+            response=UserUpdateSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -418,6 +316,7 @@ update_user_data_schema = extend_schema(
         ),
         403: OpenApiResponse(
             description="Нет прав",
+            response=UserUpdateSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -427,6 +326,7 @@ update_user_data_schema = extend_schema(
         ),
         404: OpenApiResponse(
             description="Пользователь не найден",
+            response=UserUpdateSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -440,11 +340,29 @@ update_user_data_schema = extend_schema(
 delete_user_data_schema = extend_schema(
     tags=['Пользователи'],
     summary="Удаление данных пользователя",
-    description="Очищает указанные поля пользователя (email, phone и т.д.)",
-    request=DeleteUserDataSerializer,
+    description="""Очищает указанные поля пользователя (email, phone и т.д.). 
+                   Принимает название полей в data_to_delete либо список полей. 
+                   Требуется аутентификация и права delete_user_data""",
+    parameters=[
+        OpenApiParameter(
+            name='id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description='ID пользователя',
+            required=False
+        ),
+        OpenApiParameter(
+            name='data_to_delete',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='поля, которые нужно удалить',
+            required=False
+        )
+    ],
     responses={
         200: OpenApiResponse(
             description="Данные удалены",
+            response=DeleteUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Успешный ответ",
@@ -454,6 +372,7 @@ delete_user_data_schema = extend_schema(
         ),
         400: OpenApiResponse(
             description="Ошибка валидации",
+            response=DeleteUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -463,6 +382,7 @@ delete_user_data_schema = extend_schema(
         ),
         401: OpenApiResponse(
             description="Не авторизован",
+            response=DeleteUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -472,6 +392,7 @@ delete_user_data_schema = extend_schema(
         ),
         403: OpenApiResponse(
             description="Нет прав",
+            response=DeleteUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -481,6 +402,7 @@ delete_user_data_schema = extend_schema(
         ),
         404: OpenApiResponse(
             description="Пользователь не найден",
+            response=DeleteUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -492,7 +414,6 @@ delete_user_data_schema = extend_schema(
 )
 
 
-
 get_user_data_schema = extend_schema(
     tags=['Пользователи'],
     summary="Получение данных пользователя",
@@ -502,14 +423,13 @@ get_user_data_schema = extend_schema(
             name='id',
             type=OpenApiTypes.INT,
             location=OpenApiParameter.QUERY,
-            description='ID пользователя (опционально)',
-            required=False
+            description='ID пользователя'
         )
     ],
     responses={
         200: OpenApiResponse(
             description="Данные получены",
-            response=UserRegSerializer,
+            response=GetUserDataSerializer, # Assuming UserRegSerializer is the response format
             examples=[
                 OpenApiExample(
                     "Успешный ответ",
@@ -523,6 +443,7 @@ get_user_data_schema = extend_schema(
         ),
         401: OpenApiResponse(
             description="Не авторизован",
+            response=GetUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -532,6 +453,7 @@ get_user_data_schema = extend_schema(
         ),
         404: OpenApiResponse(
             description="Пользователь не найден",
+            response=GetUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -546,10 +468,11 @@ restore_password_schema = extend_schema(
     tags=['Пользователи'],
     summary="Восстановление пароля",
     description="Генерирует новый пароль и отправляет на email",
-    request=RestorePasswordSerializer,
+    request=RestorePasswordSerializer,  # 'email' expected in RestorePasswordSerializer
     responses={
         200: OpenApiResponse(
             description="Пароль изменен",
+            response=RestorePasswordSerializer,
             examples=[
                 OpenApiExample(
                     "Успешный ответ",
@@ -559,6 +482,7 @@ restore_password_schema = extend_schema(
         ),
         400: OpenApiResponse(
             description="Ошибка валидации",
+            response=RestorePasswordSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -568,6 +492,7 @@ restore_password_schema = extend_schema(
         ),
         404: OpenApiResponse(
             description="Пользователь не найден",
+            response=RestorePasswordSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",

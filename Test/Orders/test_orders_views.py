@@ -3,6 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from Orders.models import Order, OrderProduct
 from Users.models import MarketUser
+from Products.models import Product, Cart, CartProduct
 import requests
 
 @pytest.mark.django_db
@@ -89,3 +90,20 @@ class TestOrderView:
         response = authenticated_seller_client.put(self.url, data)
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'status' in response.data
+
+    def test_create_order_without_contact(self, authenticated_buyer_client):
+        # Удаляем все контакты пользователя
+        self.buyer.contacts.all().delete()
+        
+        # Параметры для оформления заказа
+        data = {'product_id': self.product.id, 'quantity': 1}
+        Cart.objects.create(user=self.buyer)
+        CartProduct.objects.create(cart=Cart.objects.get(user=self.buyer), product=self.product, quantity=1)
+        
+        # Пытаемся оформить заказ
+        response = authenticated_buyer_client.post(reverse('Cart'), data)
+        
+        # Проверяем, что статус код 400 и сообщение об ошибке
+        assert response.status_code == status.HTTP_406_NOT_ACCEPTABLE
+        assert response.data['message'] == 'Необходимо добавить контактную информацию для оформления заказа'
+

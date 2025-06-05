@@ -15,7 +15,7 @@ class MarketUser(User):
         ('Admin', 'Администратор'),  # тип Admin - администратор
     )
     user_type = models.CharField(
-        max_length=255,  # длинна строки 255 символов
+        max_length=20,  # длинна строки 20 символов
         blank=True,  # поле может быть пустым
         null=True,  # поле может быть Null
         choices=USER_TYPES,  # типы пользователей
@@ -40,50 +40,23 @@ class UserGroup(Group):
         verbose_name_plural = 'Группы'
 
 
-# Создаем группы пользователей по умолчанию
+# создаем модель контактов юзера
+class Contact(models.Model):
+    user = models.ForeignKey(User, verbose_name='Пользователь',
+                             related_name='contacts', blank=True,
+                             on_delete=models.CASCADE)
 
+    city = models.CharField(max_length=50, verbose_name='Город')
+    street = models.CharField(max_length=100, verbose_name='Улица')
+    house = models.CharField(max_length=15, verbose_name='Дом', blank=True)
+    structure = models.CharField(max_length=15, verbose_name='Корпус', blank=True)
+    building = models.CharField(max_length=15, verbose_name='Строение', blank=True)
+    apartment = models.CharField(max_length=15, verbose_name='Квартира', blank=True)
+    phone = models.CharField(max_length=20, verbose_name='Телефон')
 
+    class Meta:
+        verbose_name = 'Контакты пользователя'
+        verbose_name_plural = "Список контактов пользователя"
 
-
-
-
-
-
-# class Seller(UnauthorizedUser):
-#     company_name = models.CharField(max_length=255, blank=True, null=True)
-#     company_address = models.CharField(max_length=255, blank=True, null=True)
-#     # ManyToManyField для связи с продуктами, которые доступны у продавца
-#     # Available_products = models.ManyToManyField(Product.objects.filter(Availiable=True), blank=True, related_name='sellers')
-
-#     class Meta:
-#         verbose_name = 'Продавец'
-#         verbose_name_plural = 'Продавцы'
-
-# class Cart(models.Model):
-#     buyer = models.OneToOneField(Buyer, on_delete=models.CASCADE, blank=True, null=True, related_name='cart')
-#     # products = models.ManyToManyField('Product', through='CartItem', related_name='carts')
-#     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-
-#     class Meta:
-#         verbose_name = 'Корзина'
-#         verbose_name_plural = 'Корзины'
-
-# class Contact(models.Model):
-#     buyer = models.OneToOneField(Buyer, on_delete=models.CASCADE, blank=True, null=True, related_name='contact')
-#     address = models.CharField(max_length=255, blank=True, null=True) #Нужно добавить ограничение на количество адресов (5)
-#     phone_number = models.CharField(max_length=20, blank=True, null=True)
-#     email = models.EmailField(blank=True, null=True)
-
-#     class Meta:
-#         verbose_name = 'Контакт'
-#         verbose_name_plural = 'Контакты'
-
-
-# class CartItem(models.Model):
-#     cart = models.ForeignKey(Cart, on_delete=models.CASCADE)
-#     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-#     quantity = models.IntegerField(default=1)
-
-#     class Meta:
-#         verbose_name = 'Позиция в корзине'
-#         verbose_name_plural = 'Позиции в корзине'
+    def __str__(self):
+        return f'{self.city} {self.street} {self.house}'

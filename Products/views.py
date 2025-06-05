@@ -7,7 +7,7 @@ from Orders.models import Order, OrderProduct
 from Users.models import MarketUser
 from Users.serializers import UserSerializer, ViewUsernameSerializer
 from .serializers import *
-from .models import Product, Category, Cart, CartProduct
+from .models import Product, Category, Cart, CartProduct, Parameters
 from rest_framework import status, serializers
 from django.core.mail import send_mail
 import os
@@ -80,6 +80,7 @@ class ProductsView(APIView):
             об ошибке, если таких прав нет.
         """
         serializer = ProductSerializer(data=request.data)
+        print(serializer.is_valid())
         if not serializer.is_valid:
             return Response(serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
@@ -154,6 +155,10 @@ class ProductsView(APIView):
             setattr(product, key, value)
             
         product.save()
+        # если изменена цена, то уведомляем админов
+        if 'price' in update_data:
+            for user in MarketUser.objects.filter(user_type='Admin'):
+                user.email_user('Цена продукта изменена', f"Цена продукта {product.name} была изменена на {product.price}")
 
         return Response(
             {"message": "Продукт успешно изменен",
@@ -229,7 +234,9 @@ class ProductsView(APIView):
         # проверяем наличие необходимого количества товара
         if product.quantity < serializer.validated_data['quantity']:
             return Response({'message': 'Недостаточное количество товара'}, status=status.HTTP_400_BAD_REQUEST)
-
+        # проверяем доступность продукта
+        if not product.is_available:
+            return Response({'message': 'Продукт недоступен для заказа'}, status=status.HTTP_400_BAD_REQUEST)
         # получаем текущего пользователя
         user = MarketUser.objects.get(id=request.session.get('user_id'))
         
@@ -253,6 +260,118 @@ class ProductsView(APIView):
             'product_id': product.id,
             'quantity': cart_product.quantity
         }, status=status.HTTP_200_OK)
+
+
+# вьюшка для изменения продавцом доступности товаров
+@products_change_schema
+class ProductsChangeView(APIView):
+    # вьюшка для изменения продавцом доступности товаров
+    def put(self, request, perm='Users.change_product_availability'):
+        serializer = ProductChangeAvailabilitySerializer(data=request.data)
+        # проверяем имеет ли пользователь право на изменение доступности продуктов
+        if not MarketUser.AccessCheck(self, request, perm):
+            print('проверку прав на изменение доступности продуктов не прошли')
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+        print('проверку прав на изменение доступности продуктов прошли')
+        print(serializer.is_valid())
+        # если id продукта не передан, то меняем is_available всех продуктов продавца
+        if 'id' not in serializer.validated_data:
+            print('id нет в данных, меняем is_available всех продуктов продавца')
+            Product.objects.filter(seller=request.user).update(is_available=request.data['is_available'])
+            return Response({'message': 'Доступность продуктов успешно изменена'}, status=status.HTTP_200_OK)
+        # если id продукта передан, то меняем is_available конкретного продукта
+        print('id есть в данных, меняем is_available конкретного продукта')
+        product = Product.objects.get(id=request.data['id'])
+        product.is_available = request.data['is_available']
+        product.save()
+        return Response({'message': 'Доступность продукта успешно изменена'}, status=status.HTTP_200_OK)
+
+    # вьюшка для добавления параметров товару
+    def post(self, request, perm='Users.add_product_parameters'):
+        serializer = CreateParametersSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # проверяем имеет ли пользователь право на добавление параметров продуктов
+        if not MarketUser.AccessCheck(self, request, perm):
+            print('проверку прав на добавление параметров продуктов не прошли')
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+        print('проверку прав на добавление параметров продуктов прошли')
+        # если id продукта не передан, то возвращаем ошибку
+        if 'product_id' not in serializer.validated_data:
+            print('id продукта не передан')
+            return Response({'message': 'ID продукта не передан'}, status=status.HTTP_400_BAD_REQUEST)
+        print('id есть в данных, добавляем параметры конкретного продукта')
+        # проверяем, что продукт относится к продавцу
+        if serializer.validated_data['product_id'] not in Product.objects.filter(seller=request.user).values_list('id', flat=True):
+            print('продукт относится к другому продавцу')
+            return Response({'message': 'Продукт относится к другому продавцу'}, status=status.HTTP_400_BAD_REQUEST)
+        print('все проверки прошли, добавляем параметры конкретного продукта')
+        print(serializer.validated_data)
+        # если id продукта передан, то добавляем параметры конкретного продукта
+        Product.objects.get(id=serializer.validated_data['product_id']).parameters.add(
+            Parameters.objects.create(
+                product=Product.objects.get(id=serializer.validated_data['product_id']),
+                name=serializer.validated_data['name'],
+                value=serializer.validated_data.get('value')
+            )
+        )
+        return Response({'message': 'Параметры продукта успешно добавлены'}, status=status.HTTP_200_OK)
+
+        #вьюшка для удаления параметров товара
+    def delete(self, request, perm='Users.delete_product_parameters'):
+        serializer = DeleteParametersSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # проверяем имеет ли пользователь право на удаление параметров продуктов
+        if not MarketUser.AccessCheck(self, request, perm):
+            print('проверку прав на удаление параметров продуктов не прошли')
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+        # если id параметра не передан, то удаляем все параметры продукта
+        if 'parameters_id' not in serializer.validated_data:
+            Product.objects.get(id=serializer.validated_data['product_id']).parameters.clear()
+            return Response({'message': 'Параметры продукта успешно удалены'}, status=status.HTTP_200_OK)   
+        # проверяем, что продукт относится к продавцу
+        if serializer.validated_data['product_id'] not in Product.objects.filter(seller=request.user).values_list('id', flat=True):
+            return Response({'message': 'Продукт относится к другому продавцу'}, status=status.HTTP_400_BAD_REQUEST)
+        # если id параметра передан, то пробуем его получить
+        try:
+            Parameters.objects.get(id=serializer.validated_data['parameters_id'])
+        except Parameters.DoesNotExist:
+            return Response({'message': 'Такого параметра не существует'}, status=status.HTTP_404_NOT_FOUND)
+        # параметры существуют, удаляем    
+        Product.objects.get(id=serializer.validated_data['product_id']).parameters.get(id=serializer.validated_data['parameters_id']).delete()
+        return Response({'message': 'Параметры продукта успешно удалены'}, status=status.HTTP_200_OK)
+
+    # вьюшка для изменения параметров товара
+    def patch(self, request, perm='Users.update_product_parameters'):
+        serializer = UpdateParametersSerializer(data=request.data)
+        print('проверяем сериализатор')
+        print(serializer.is_valid())
+        serializer.is_valid(raise_exception=True)
+        print('проверку прав на изменение параметров продуктов прошли')
+        # проверяем имеет ли пользователь право на изменение параметров продуктов
+        if not MarketUser.AccessCheck(self, request, perm):
+            print('проверку прав на изменение параметров продуктов не прошли')
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+        # если id продукта не передан, то возвращаем ошибку
+        if 'product_id' not in serializer.validated_data:
+            print('id продукта не передан')
+            return Response({'message': 'ID продукта не передан'}, status=status.HTTP_400_BAD_REQUEST)
+        # проверяем, что продукт относится к продавцу
+        if serializer.validated_data['product_id'] not in Product.objects.filter(seller=request.user).values_list('id', flat=True):
+            print('продукт относится к другому продавцу')
+            return Response({'message': 'Продукт относится к другому продавцу'}, status=status.HTTP_400_BAD_REQUEST)
+        # если id продукта передан, то изменяем параметры конкретного продукта
+        print('id есть в данных, меняем параметры конкретного продукта')
+        try:
+            Parameters.objects.get(id=serializer.validated_data['parameters_id'])
+        except Parameters.DoesNotExist:
+            return Response({'message': 'Такого параметра не существует'}, status=status.HTTP_404_NOT_FOUND)
+        param =Product.objects.get(id=serializer.validated_data['product_id']).parameters.all()
+        print(param.all())
+        param.update(
+            name=serializer.validated_data['name'],
+            value=serializer.validated_data['value']
+        )
+        return Response({'message': 'Параметры продукта успешно изменены'}, status=status.HTTP_200_OK)
 
 
 # Документация для CategoriesView
@@ -376,6 +495,7 @@ class CategoriesView(APIView):
 # Документация для CartView
 @cart_view_schema
 class CartView(APIView):
+    # вьюшка для получения корзины
     def get(self, request, perm='Users.view_cart'):
         """
         Получить корзину пользователя.
@@ -415,7 +535,7 @@ class CartView(APIView):
             ],
             'Total_price': total_price
         }, status=status.HTTP_200_OK)
-
+    # вьюшка для удаления продукта из корзины
     def delete(self, request, perm='Users.delete_product_from_cart'):
         """
         Удаляет продукт из корзины пользователя.
@@ -441,6 +561,7 @@ class CartView(APIView):
         # если товара нет в корзине, то возвращаем ошибку
         return Response({"message": "Товар не находится в корзине"}, status=status.HTTP_400_BAD_REQUEST)
 
+    # вьюшка для обновления продукта в корзине
     def put(self, request, perm='Users.update_product_in_cart'):
         """
         Обновляет продукт в корзине пользователя.
@@ -467,6 +588,12 @@ class CartView(APIView):
         # ищем корзину текущего пользователя
         user = MarketUser.objects.get(id=request.session.get('user_id'))
         cart, created = Cart.objects.get_or_create(user=user)
+        # проверяем достаточное количество товара в наличии у продавца
+        if products.quantity < serializer.validated_data['quantity']:
+            return Response({'message': 'Недостаточное количество товара'}, status=status.HTTP_400_BAD_REQUEST)
+        # проверяем доступность продукта
+        if not products.is_available:
+            return Response({'message': 'Товар недоступен для заказа'}, status=status.HTTP_400_BAD_REQUEST)
         # если товар есть в корзине, то обновляем количество товара в корзине
         if products in cart.products.all():
             cart_product = CartProduct.objects.filter(cart=cart, product=products).update(quantity=serializer.validated_data['quantity'])
@@ -474,6 +601,7 @@ class CartView(APIView):
         # если товара нет в корзине, то возвращаем ошибку
         return Response({"message": "Товар не находится в корзине"}, status=status.HTTP_400_BAD_REQUEST)
 
+    # вьюшка для оформления заказа
     def post(self, request, perm='Users.order'):
         """
         Оформляет заказ.
@@ -496,6 +624,23 @@ class CartView(APIView):
         # проверяем, есть ли в корщине товары
         if not cart.cart_products.exists():
              return Response({'message': 'В корзине нет товаров'}, status=status.HTTP_406_NOT_ACCEPTABLE)
+        # проверяем, есть ли у покупателя контакты
+        if not user.contacts.exists():
+            return Response({'message': 'Необходимо добавить контактную информацию для оформления заказа'}, status=status.HTTP_406_NOT_ACCEPTABLE)
+        # проверяем достаточное количество товара в наличии у продавца
+        for product in cart.cart_products.all():
+            if product.product.quantity < product.quantity:
+                return Response({'message': 'Недостаточное количество товара',
+                                 'id': product.product.id,
+                                 'name': product.product.name},
+                                  status=status.HTTP_406_NOT_ACCEPTABLE)
+        # проверяем доступность продукта
+        for product in cart.cart_products.all():
+            if not product.product.is_available:
+                return Response({'message': 'Товар недоступен для заказа',
+                                 'id': product.product.id,
+                                 'name': product.product.name},
+                                  status=status.HTTP_406_NOT_ACCEPTABLE)
         # Создаем заказ
         order = Order.objects.create(
             user=user,

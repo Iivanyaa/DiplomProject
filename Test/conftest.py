@@ -127,6 +127,25 @@ def seller_order(order, seller_user):
     return SellerOrder.objects.create(order=order, seller=seller_user)
 
 
+@pytest.fixture
+def another_seller_user(db):
+    user = MarketUser.objects.create_user(
+        username='another_seller',
+        password='testpass',
+        user_type='Seller'
+    )
+    return user
+
+@pytest.fixture
+def product_another_seller(another_seller_user):
+    product = Product.objects.create(
+        name="Test Product",
+        price=100.00,
+        description="Test Description",
+        quantity=10,
+        seller=another_seller_user
+    )
+    return product
 
 
 __all__ = [
@@ -145,5 +164,7 @@ __all__ = [
     'cart',
     'order',
     'order_product',
-    'seller_order'
+    'seller_order',
+    'another_seller_user',
+    'product_another_seller'
 ]

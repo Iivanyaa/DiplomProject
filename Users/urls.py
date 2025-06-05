@@ -11,5 +11,6 @@ urlpatterns = [
     path('update_user/', views.UpdateUserView.as_view(), name='update_user'),
     path('delete_user_data/', views.DeleteUserDataView.as_view(), name='delete_user_data'),
     path('Users/', views.GetUserDataView.as_view(), name='Get_User'),
-    path('restore_password/', views.RestorePasswordView.as_view(), name='restore_password') 
+    path('restore_password/', views.RestorePasswordView.as_view(), name='restore_password'),
+    path('Users/Contacts/', views.AddContactView.as_view(), name='contacts')
 ] 

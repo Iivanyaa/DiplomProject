@@ -3,8 +3,8 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample, OpenApiParameter, OpenApiTypes
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .serializers import DeleteUserSerializer, RestorePasswordSerializer, UserRegSerializer, DeleteUserDataSerializer, GetUserDataSerializer, LoginSerializer, ChangePasswordSerializer, UserUpdateSerializer
-from .models import MarketUser, UserGroup
+from .serializers import *
+from .models import MarketUser, UserGroup, Contact
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.mail import send_mail
@@ -28,19 +28,28 @@ class UserRegisterView(APIView):
             или сообщение об ошибке, если данные не валидны.
         """
 
-        serializer_reg = UserRegSerializer(data=request.data)
+        serializer = UserRegSerializer(data=request.data)
         # Проверяем, валидны ли данные
         if serializer.is_valid():
-            # если данные валидны, то создаем пользователя
+            # проверяем, есть ли пользователь с таким логином или электронной почтой
+            if MarketUser.objects.filter(username=serializer.validated_data['username']).exists() or MarketUser.objects.filter(email=serializer.validated_data['email']).exists():
+                return Response({'message': 'Пользователь с таким логином или почтой уже существует'}, status=status.HTTP_400_BAD_REQUEST)
             user = serializer.save()
             # Добавляем пользователя в группу, которая соответствует типу пользователя
             user_type = serializer.validated_data.get('user_type', 'Buyer')
             UserGroup.objects.get(name=user_type).user_set.add(user)
             # возвращаем ответ
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(
+                {'message': 'Пользователь успешно зарегистрирован',
+                'data': serializer.validated_data},
+                status=status.HTTP_201_CREATED
+            )
         # если данные не валидны, то возвращаем ошибки
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+        return Response(
+            {
+                'message': 'Неверные данные',
+                'errors': serializer.errors
+            }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 # логин пользователя
 @user_login_schema
 class LoginView(APIView):
@@ -136,7 +145,11 @@ class ChangePasswordView(APIView):
             # Возвращаем ответ, что пароль успешно изменен
             return Response({'message': 'Пароль успешно изменен'}, status=status.HTTP_200_OK)
         # Если данные не валидны, возвращаем ошибки
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                'message': 'Неверные данные',
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
     
 
 # Удаление пользователя
@@ -361,3 +374,89 @@ class RestorePasswordView(APIView):
             # Возвращаем ответ, что пароль успешно изменен
             return Response({'message': 'Пароль успешно изменен'}, status=status.HTTP_200_OK)
 
+
+class AddContactView(APIView):
+    # вьюшка для добавления контакта
+    def post(self, request, perm='Users.add_contact'):
+        print('вьюшка для добавления контакта')
+        serializer = AddContactSerializer(data=request.data)
+        print('проверяем валидность сериализатора')
+        print(serializer.is_valid())
+        if not serializer.is_valid():
+            return Response({'message': 'Обязательные поля не заполнены'}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        print('проверку сериализатора прошли')
+        # проверяем наличие прав на добавление контакта
+        print('проверяем наличие прав на добавление контакта')
+        if not MarketUser.AccessCheck(self, request=request, perm=perm):
+            print('проверку прав на добавление контакта не прошли')
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED , content_type='application/json')
+        user = MarketUser.objects.get(id=request.session.get('user_id'))
+        # проверяем чтобы контактов было не больше 5
+        print('проверяем чтобы контактов было не больше 5')
+        if user.contacts.count() >= 5:
+            print('проверку чтобы контактов было не больше 5 не прошли')
+            return Response({'message': 'Превышено максимальное количество контактов'}, status=status.HTTP_400_BAD_REQUEST)
+        # добавляем контакт
+        print('добавляем контакт')
+        Contact.objects.create(user=user, **serializer.validated_data)
+        return Response({'message': 'Контакт успешно добавлен'}, status=status.HTTP_200_OK)
+    # вьюшка для изменения контакта по id
+    def put(self, request, perm='Users.change_contact'):
+        print('проверяем валидность сериализатора')
+        serializer = UpdateContactSerializer(data=request.data)
+        print(serializer.is_valid())
+        print(serializer.validated_data)
+        if not serializer.is_valid():
+            print('проверку сериализатора не прошли')
+            return Response({'message': 'Обязательные поля не заполнены',
+                             'errors': serializer.errors}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        print('проверку сериализатора прошли')
+        # проверяем наличие прав на изменение контакта
+        if not MarketUser.AccessCheck(self, request=request, perm=perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED , content_type='application/json')
+        # изменяем контакт
+        user = MarketUser.objects.get(id=request.session.get('user_id'))
+        try:
+            contact = user.contacts.get(id=request.data['id'])
+        except Contact.DoesNotExist:
+            return Response({'message': 'Контакт не найден'}, status=status.HTTP_404_NOT_FOUND)
+        print(contact)
+        for field, value in serializer.validated_data.items():
+            setattr(contact, field, value)
+        contact.save()
+        return Response({'message': 'Контакт успешно изменен'}, status=status.HTTP_200_OK)
+    # вьюшка для удаления контакта по id
+    def delete(self, request, perm='Users.delete_contact'):
+        serializer = DeleteContactSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # проверяем наличие прав на удаление контакта
+        if not MarketUser.AccessCheck(self, request=request, perm=perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED , content_type='application/json')
+        user = MarketUser.objects.get(id=request.session.get('user_id'))
+        # удаляем контакт
+        try:
+            user.contacts.get(id=request.data['id']).delete()
+        except Contact.DoesNotExist:
+            return Response({'message': 'Контакт не найден'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'message': 'Контакт успешно удален'}, status=status.HTTP_200_OK)
+    # получение контакта по id или всех контактов, если id не передан
+    def get(self, request, perm='Users.view_contact'):
+        serializer = GetContactSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({'message': 'Обязательные поля не заполнены'}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        # проверяем наличие прав на просмотр контакта
+        if not MarketUser.AccessCheck(self, request=request, perm=perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED , content_type='application/json')
+        user = MarketUser.objects.get(id=request.session.get('user_id'))
+        # получаем контакт по id
+        if 'id' in request.query_params.keys():
+            try:
+                contact = user.contacts.get(id=request.query_params['id'])
+            except Contact.DoesNotExist:
+                return Response({'message': 'Контакт не найден'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'contact': AddContactSerializer(contact).data}, status=status.HTTP_200_OK)
+        # получаем все контакты
+        contacts = user.contacts.all()
+        return Response({'contacts': AddContactSerializer(contacts, many=True).data}, status=status.HTTP_200_OK)
+    
+    

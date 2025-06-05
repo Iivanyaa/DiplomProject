@@ -27,8 +27,8 @@ def create_initial_groups(sender, **kwargs):
     # права продавца
     seller_permissions = [  'add_product', 'change_good', 'delete_good', 'view_good',
                             'change_password', 'get_category', 'view_orders', 'update_order_status',
-                            'update_product', 'delete_product', 
-                            "delete_self"
+                            'update_product', 'delete_product', 'change_product_availability',
+                            "delete_self", "delete_product_parameters", "add_product_parameters", "update_product_parameters"
                             ]
     # права покупателя  
     buyer_permissions = [
@@ -38,7 +38,8 @@ def create_initial_groups(sender, **kwargs):
                             'buy_delivery', 'view_review', 'buy_review',
                             'change_password', 'get_category',
                             'update_product_in_cart', 'delete_product_from_cart',
-                            'order', 'view_orders', 'delete_self'
+                            'order', 'view_orders', 'delete_self', 'add_contact',
+                            'change_contact', 'delete_contact', 'view_contact'
                             ]
     
     content_type = ContentType.objects.get_for_model(UserGroup)

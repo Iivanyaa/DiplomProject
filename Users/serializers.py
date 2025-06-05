@@ -1,12 +1,13 @@
 from django.forms import ValidationError
 from rest_framework import serializers
-from .models import MarketUser
+from .models import MarketUser, Contact
 from django.contrib.auth.hashers import make_password
 
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = MarketUser
+        password = serializers.CharField(write_only=True, min_length=8)
         fields = ['username', 'password', 'email']
 
     def create(self, validated_data):
@@ -57,8 +58,6 @@ class UserUpdateSerializer(UserSerializer):
         
         return attrs
 
-        return super().validate(attrs)
-
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(max_length=128, write_only=True)
@@ -104,7 +103,8 @@ class ChangePasswordSerializer(serializers.Serializer):
 # Сериализатор для удаления пользователя
 class DeleteUserSerializer(serializers.Serializer):
     id = serializers.IntegerField(required=False, allow_null=True)
-    username = serializers.CharField(required=False, allow_null=True)  # Идентификатор пользователя (обязательное поле)
+    username = serializers.CharField(required=False, allow_null=True)
+
 
     def validate(self, attrs):
         # Проверяем, существует ли пользователь с данным идентификатором
@@ -136,8 +136,11 @@ class DeleteUserSerializer(serializers.Serializer):
     
 
 # Сериализатор для получения данных пользователя по ID
-class GetUserDataSerializer(serializers.Serializer):
-    id = serializers.IntegerField(required=False, allow_null=True) # Идентификатор пользователя (обязательное поле)
+class GetUserDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MarketUser
+        id = serializers.IntegerField(required=False, allow_null=True)
+        fields = ['id']
     
     def validate(self, attrs):
         # Получаем все ключи из исходных данных
@@ -199,7 +202,73 @@ class ViewUsernameSerializer(serializers.ModelSerializer):
         fields = ['username']
 
 
+class AddContactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contact
+        fields = ['id', 'city', 'street', 'house', 'structure', 'building', 'apartment', 'phone']
 
+class UpdateContactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contact
+        fields = ['id', 'city', 'street', 'house', 'structure', 'building', 'apartment', 'phone']
+        extra_kwargs = {
+            'id': {'required': False, 'allow_null': True},
+            'city': {'required': False, 'allow_null': True},
+            'street': {'required': False, 'allow_null': True},
+            'house': {'required': False, 'allow_null': True},
+            'structure': {'required': False, 'allow_null': True},
+            'building': {'required': False, 'allow_null': True},
+            'apartment': {'required': False, 'allow_null': True},
+            'phone': {'required': False, 'allow_null': True},
+        }
+
+        def validate(self, attrs):
+            # Получаем все ключи из исходных данных
+            received_keys = set(self.initial_data.keys())
+            # Получаем ключи, объявленные в сериализаторе
+            allowed_keys = set(self.fields.keys())
+            # Находим неизвестные ключи
+            unknown_keys = received_keys - allowed_keys
+            # Проверяем наличие неизвестных ключей
+            if unknown_keys:
+                raise ValidationError(
+                    f"Недопустимые поля: {', '.join(unknown_keys)}. "
+                    f"Допустимые поля: {', '.join(allowed_keys)}."
+                )
+            
+            attrs = super().validate(self.initial_data)
+            
+            return attrs
+
+class DeleteContactSerializer(serializers.Serializer):
+    id = serializers.IntegerField(required=True, allow_null=True)
+
+class GetContactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contact
+        fields = ['id']
+        extra_kwargs = {
+            'id': {'required': False, 'allow_null': True},
+        }
+    
+
+
+__all__ = [
+    'UserSerializer',
+    'UserRegSerializer',
+    'GetUserDataSerializer',
+    'DeleteUserDataSerializer',
+    'RestorePasswordSerializer',
+    'ViewUsernameSerializer',
+    'AddContactSerializer',
+    'UserUpdateSerializer',
+    'LoginSerializer',
+    'ChangePasswordSerializer',
+    'DeleteUserSerializer',
+    'UpdateContactSerializer',
+    'DeleteContactSerializer',
+    'GetContactSerializer'
+]
 
 # class SellerSerializer(serializers.ModelSerializer):
 #     class Meta:

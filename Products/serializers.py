@@ -14,6 +14,12 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = ['name', 'price', 'description', 'quantity', 'is_available', 'categories']
 
+
+class ProductChangeAvailabilitySerializer(serializers.Serializer):
+    id = serializers.IntegerField(required=False, allow_null=True)
+    is_available = serializers.BooleanField(required=True, allow_null=False)
+
+
 class ProductsListSerializer(ProductSerializer):
     id = serializers.IntegerField(required=False, allow_null=True)
 
@@ -180,6 +186,19 @@ class CartProductSearchSerializer(serializers.Serializer):
     
         return attrs
 
+class CreateParametersSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField(required=True, allow_null=False)
+    name = serializers.CharField(required=True, allow_null=False)
+    value = serializers.CharField(required=False, allow_null=True)
+
+class UpdateParametersSerializer(CreateParametersSerializer):
+    parameters_id = serializers.IntegerField(required=True, allow_null=False)
+
+class DeleteParametersSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField(required=True, allow_null=False)
+    parameters_id = serializers.IntegerField(required=False, allow_null=True)
+
+
 
 __all__ = [
     'ProductSerializer',
@@ -192,5 +211,9 @@ __all__ = [
     'CategoryUpdateSerializer',
     'ProductAddSerializer',
     'ProductsListSerializer',
-    'CartProductSearchSerializer'
+    'CartProductSearchSerializer',
+    'ProductChangeAvailabilitySerializer',
+    'CreateParametersSerializer',
+    'UpdateParametersSerializer',
+    'DeleteParametersSerializer'
 ]

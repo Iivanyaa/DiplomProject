@@ -1,8 +1,11 @@
 import pytest
 from django.urls import reverse
 from rest_framework import status
-from Users.models import MarketUser
-from Test.Users.conftest import __all__
+from Users.models import MarketUser, Contact, UserGroup
+from Test.Users.conftest import *
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
+from Users.serializers import *
 
 from django.contrib.auth.models import Permission
 
@@ -46,9 +49,9 @@ class TestUserRegisterView:
             'email': 'invalid-email'
         }
         response = api_client.post(self.url, data, format='json')
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'username' in response.data
-        assert 'email' in response.data
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert 'username' in response.data['errors'].keys()
+        assert 'email' in response.data['errors'].keys()
 
 @pytest.mark.django_db
 class TestLoginView:
@@ -384,3 +387,168 @@ class TestRestorePasswordView:
         response = api_client.post(self.url, data, format='json')
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert 'Пользователь с таким электронным адресом не найден' in response.data['message']
+
+@pytest.mark.django_db
+class TestAddContactView:
+    # URL для AddContactView
+    url = reverse('contacts') # Замените 'contacts' на фактическое имя вашего URL-адреса
+
+    def test_add_contact_success(self, authenticated_buyer_client, buyer_user, contact_data):
+        # Проверка успешного добавления контакта
+        response = authenticated_buyer_client.post(self.url, contact_data, format='json')
+        assert response.status_code == status.HTTP_200_OK
+        assert 'Контакт успешно добавлен' in response.data['message']
+        assert buyer_user.contacts.count() == 1
+        assert buyer_user.contacts.first().phone == contact_data['phone']
+
+    def test_add_contact_unauthenticated(self, api_client, contact_data):
+        # Проверка добавления контакта неаутентифицированным пользователем
+        data = contact_data
+        response = api_client.post(self.url, data, format='json')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert 'Недостаточно прав' in response.data['message']
+
+    def test_add_contact_insufficient_permissions(self, authenticated_buyer_client, buyer_user, contact_data):
+        # Проверка добавления контакта без необходимых прав
+        # Удаляем разрешение на добавление контакта у пользователя
+        content_type = ContentType.objects.get_for_model(MarketUser)
+        buyer_group = UserGroup.objects.get(name='Buyer')
+        buyer_group.permissions.clear()
+        buyer_user.save()
+
+        response = authenticated_buyer_client.post(self.url, contact_data, format='json')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED # Или HTTP_403_FORBIDDEN, в зависимости от AccessCheck
+        assert 'Недостаточно прав' in response.data['message']
+
+    def test_add_contact_max_limit_exceeded(self, authenticated_buyer_client, buyer_user, contact_data):
+        # Проверка добавления контакта при превышении максимального лимита (5 контактов)
+        for i in range(5):
+            Contact.objects.create(user=buyer_user, city=f'City{i}', street=f'Street{i}', phone=f'+7900000000{i}')
+        
+        response = authenticated_buyer_client.post(self.url, contact_data, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'Превышено максимальное количество контактов' in response.data['message']
+        assert buyer_user.contacts.count() == 5 # Убеждаемся, что новый контакт не добавлен
+
+    def test_add_contact_invalid_data(self, authenticated_buyer_client):
+        # Проверка добавления контакта с невалидными данными (например, отсутствует обязательное поле)
+        invalid_data = {'city': 'TestCity'} # Отсутствует 'street' и 'phone'
+        response = authenticated_buyer_client.post(self.url, invalid_data, format='json')
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY # Или HTTP_400_BAD_REQUEST, в зависимости от raise_exception
+        assert 'message' in response.data and response.data['message'] == 'Обязательные поля не заполнены' 
+
+    def test_change_contact_success(self, authenticated_buyer_client, buyer_user, create_contact):
+        # Проверка успешного изменения контакта
+        print(create_contact.id)
+        updated_data = {'id': create_contact.id, 'phone': '+79998887766', 'city': 'Новый Город'}
+        print(updated_data)
+        response = authenticated_buyer_client.put(self.url, updated_data, format='json')
+        print(response.data)
+        assert response.status_code == status.HTTP_200_OK
+        assert 'Контакт успешно изменен' in response.data['message']
+        create_contact.refresh_from_db() # Обновляем объект из базы данных
+        assert create_contact.phone == updated_data['phone']
+        assert create_contact.city == updated_data['city']
+
+    def test_change_contact_unauthenticated(self, api_client, create_contact):
+        # Проверка изменения контакта неаутентифицированным пользователем
+        updated_data = {'id': create_contact.id, 'phone': '+79998887766'}
+        response = api_client.put(self.url, updated_data, format='json')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert 'Недостаточно прав' in response.data['message']
+
+    def test_change_contact_insufficient_permissions(self, authenticated_buyer_client, buyer_user, create_contact):
+        # Проверка изменения контакта без необходимых прав
+        buyer_group = UserGroup.objects.get(name='Buyer')
+        buyer_group.permissions.clear()
+
+        updated_data = {'id': create_contact.id, 'phone': '+79998887766'}
+        response = authenticated_buyer_client.put(self.url, updated_data, format='json')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED # Или HTTP_403_FORBIDDEN
+        assert 'Недостаточно прав' in response.data['message']
+
+    def test_change_contact_not_found(self, authenticated_buyer_client):
+        # Проверка изменения несуществующего контакта
+        updated_data = {'id': 9999, 'phone': '+79998887766'} # Несуществующий ID
+        response = authenticated_buyer_client.put(self.url, updated_data, format='json')
+        # В зависимости от реализации, это может быть 400, 404 или 200 с сообщением об отсутствии изменений
+        # Предполагаем, что фильтр не найдет и update не сработает
+        assert response.status_code == status.HTTP_404_NOT_FOUND # Если update() на пустом QuerySet просто ничего не делает
+        assert 'Контакт не найден' in response.data['message'] # Если сообщение всегда возвращается
+        # Более точная проверка:
+        # assert not Contact.objects.filter(id=9999).exists() # Если бы была проверка на существование
+
+    def test_delete_contact_success(self, authenticated_buyer_client, buyer_user, create_contact):
+        # Проверка успешного удаления контакта
+        initial_count = buyer_user.contacts.count()
+        response = authenticated_buyer_client.delete(self.url, {'id': create_contact.id}, format='json')
+        assert response.status_code == status.HTTP_200_OK
+        assert 'Контакт успешно удален' in response.data['message']
+        assert buyer_user.contacts.count() == initial_count - 1
+        assert not Contact.objects.filter(id=create_contact.id).exists()
+
+    def test_delete_contact_unauthenticated(self, api_client, create_contact):
+        # Проверка удаления контакта неаутентифицированным пользователем
+        response = api_client.delete(self.url, {'id': create_contact.id}, format='json')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert 'Недостаточно прав' in response.data['message']
+
+    def test_delete_contact_insufficient_permissions(self, authenticated_buyer_client, buyer_user, create_contact):
+        # Проверка удаления контакта без необходимых прав
+        content_type = ContentType.objects.get_for_model(MarketUser)
+        buyer_group = UserGroup.objects.get(name='Buyer')
+        buyer_group.permissions.clear()
+
+        response = authenticated_buyer_client.delete(self.url, {'id': create_contact.id}, format='json')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED # Или HTTP_403_FORBIDDEN
+        assert 'Недостаточно прав' in response.data['message']
+
+    def test_delete_contact_not_found(self, authenticated_buyer_client):
+        # Проверка удаления несуществующего контакта
+        response = authenticated_buyer_client.delete(self.url, {'id': 9999}, format='json') # Несуществующий ID
+        assert response.status_code == status.HTTP_404_NOT_FOUND 
+        assert 'Контакт не найден' in response.data['message'] # Если сообщение всегда возвращается
+
+    def test_get_all_contacts_success(self, authenticated_buyer_client, buyer_user):
+        # Проверка получения всех контактов
+        contact1 = Contact.objects.create(user=buyer_user, city='City1', street='Street1', phone='111')
+        contact2 = Contact.objects.create(user=buyer_user, city='City2', street='Street2', phone='222')
+
+        response = authenticated_buyer_client.get(self.url) # Запрос без ID
+        assert response.status_code == status.HTTP_200_OK
+        assert 'contacts' in response.data
+        assert len(response.data['contacts']) == 2
+        # Проверяем, что данные сериализованы правильно
+        assert response.data['contacts'][0]['phone'] == contact1.phone
+        assert response.data['contacts'][1]['phone'] == contact2.phone
+
+
+    def test_get_single_contact_success(self, authenticated_buyer_client, buyer_user, create_contact):
+        # Проверка получения конкретного контакта по ID
+        response = authenticated_buyer_client.get(self.url, {'id': create_contact.id})
+        assert response.status_code == status.HTTP_200_OK
+        assert 'contact' in response.data
+        assert response.data['contact']['phone'] == create_contact.phone
+        assert response.data['contact']['city'] == create_contact.city
+
+    def test_get_contact_unauthenticated(self, api_client, contact_data):
+        # Проверка получения контактов неаутентифицированным пользователем
+        data = contact_data
+        response = api_client.get(self.url, data, format='json')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert 'Недостаточно прав' in response.data['message']
+
+    def test_get_contact_insufficient_permissions(self, authenticated_buyer_client, buyer_user):
+        # Проверка получения контактов без необходимых прав
+        buyer_group = UserGroup.objects.get(name='Buyer')
+        buyer_group.permissions.clear()
+
+        response = authenticated_buyer_client.get(self.url)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED # Или HTTP_403_FORBIDDEN
+        assert 'Недостаточно прав' in response.data['message']
+
+    def test_get_single_contact_not_found(self, authenticated_buyer_client):
+        # Проверка получения несуществующего контакта по ID
+        response = authenticated_buyer_client.get(self.url, {'id': 9999})
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert 'Контакт не найден' in response.data['message']

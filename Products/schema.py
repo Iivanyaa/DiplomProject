@@ -8,6 +8,7 @@ from drf_spectacular.utils import (
     inline_serializer
 )
 from rest_framework import serializers
+from .serializers import *
 
 
 
@@ -59,43 +60,7 @@ products_list_schema = extend_schema_view(
         tags=['Продукты'],
         summary="Создать новый продукт",
         description="Создание нового продукта (требуются права add_product)",
-        parameters=[
-            OpenApiParameter(
-                name='name',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Название продукта',
-                required=True
-            ),
-            OpenApiParameter(
-                name='price',
-                type=OpenApiTypes.FLOAT,
-                location=OpenApiParameter.QUERY,
-                description='Цена продукта',
-                required=True
-            ),
-            OpenApiParameter(
-                name='description',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Описание продукта',
-                required=False
-            ),
-            OpenApiParameter(
-                name='quantity',
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                description='Количество товара',
-                required=True
-            ),
-            OpenApiParameter(
-                name='categories',
-                type={'type': 'array', 'items': {'type': 'number'}},
-                location=OpenApiParameter.QUERY,
-                description='Список ID категорий',
-                required=False
-            )
-        ],
+        request=ProductAddSerializer, # Параметры теперь в теле запроса
         examples=[
             OpenApiExample(
                 'Пример запроса',
@@ -114,48 +79,14 @@ products_list_schema = extend_schema_view(
         tags=['Продукты'],
         summary="Обновить продукт",
         description="Обновление информации о продукте (требуются права update_product)",
-        parameters=[
-            OpenApiParameter(
-                name='name',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Название продукта',
-                required=True
-            ),
-            OpenApiParameter(
-                name='price',
-                type=OpenApiTypes.FLOAT,
-                location=OpenApiParameter.QUERY,
-                description='Цена продукта',
-                required=True
-            ),
-            OpenApiParameter(
-                name='description',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Описание продукта',
-                required=False
-            ),
-            OpenApiParameter(
-                name='quantity',
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                description='Количество товара',
-                required=True
-            ),
-            OpenApiParameter(
-                name='categories',
-                type={'type': 'array', 'items': {'type': 'number'}},
-                location=OpenApiParameter.QUERY,
-                description='Список ID категорий',
-                required=False
-            )
-        ],
+        # Если ID продукта передаётся в URL (например, /products/{id}/), то здесь его не нужно
+        # Если ID продукта передаётся в теле, используйте ProductUpdateSerializer
+        request=ProductUpdateSerializer,
         examples=[
             OpenApiExample(
                 'Пример запроса',
                 value={
-                    "id": 1,
+                    "id": 1, # Если ID передается в теле
                     "name": "Обновленное название",
                     "price": 120.50,
                     "description": "Новое описание",
@@ -182,6 +113,7 @@ products_list_schema = extend_schema_view(
         responses={
             200: OpenApiResponse(
                 description="Продукт удален",
+                response=ProductSearchSerializer,
                 examples=[
                     OpenApiExample(
                         "Успешный ответ",
@@ -191,6 +123,7 @@ products_list_schema = extend_schema_view(
             ),
             404: OpenApiResponse(
                     description="Продукт не найден",
+                    response=ProductSearchSerializer,
                     examples=[
                         OpenApiExample(
                             "Ошибка",
@@ -200,6 +133,7 @@ products_list_schema = extend_schema_view(
                 ),
             403: OpenApiResponse(
                 description="Нет прав",
+                response=ProductSearchSerializer,
                 examples=[
                     OpenApiExample(
                         "Ошибка",
@@ -222,25 +156,11 @@ products_list_schema = extend_schema_view(
         tags=['Продукты'],
         summary="Добавить продукт в корзину",
         description="Добавление продукта в корзину пользователя (требуются права add_to_cart)",
-        parameters=[
-            OpenApiParameter(
-                name='id',
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                description='ID продукта',
-                required=True
-                ),
-            OpenApiParameter(
-                name='quantity',
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                description='Количество товара',
-                required=True
-                )
-            ],
+        request=ProductAddToCartSerializer, # Параметры теперь в теле запроса
         responses={
             200: OpenApiResponse(
                 description="Продукт добавлен в корзину",
+                response=ProductAddToCartSerializer,
                 examples=[
                     OpenApiExample(
                         "Успешный ответ",
@@ -255,6 +175,7 @@ products_list_schema = extend_schema_view(
             ),
             400: OpenApiResponse(
                 description="Недостаточно товара",
+                response=ProductAddToCartSerializer,
                 examples=[
                     OpenApiExample(
                         "Недостаточно товара",
@@ -264,6 +185,7 @@ products_list_schema = extend_schema_view(
             ),
             403: OpenApiResponse(
                 description="Нет прав",
+                response=ProductAddToCartSerializer,
                 examples=[
                     OpenApiExample(
                         "Ошибка",
@@ -272,16 +194,18 @@ products_list_schema = extend_schema_view(
                 ]
             ),
             404: OpenApiResponse(
-                description="Продукт не найден",
+                description="Продукт не найден",
+                response=ProductAddToCartSerializer,
                 examples=[
                     OpenApiExample(
                         "Ошибка",
-                        value={"message": "Продукт не найден"}
+                        value={"message": "Продукт не найден"}
                     )
                 ]
             ),
             422: OpenApiResponse(
                 description="Некорректные данные",
+                response=ProductAddToCartSerializer,
                 examples=[
                     OpenApiExample(
                         "Ошибка",
@@ -290,17 +214,90 @@ products_list_schema = extend_schema_view(
                 ]
             )
         },
+    )
+)
+
+products_change_schema = extend_schema_view(
+    put=extend_schema(
+        tags=['Продукты'],
+        summary="Изменение доступности продукта (для продавцов)",
+        description="""Изменение доступности продукта (требуются права change_product_availability)
+        Передается ID продукта (необязательно) в теле запроса и доступность в теле запроса (Boolean)
+        Если передан ID продукта, то изменяется доступность продукта с этим ID
+        Если не передан ID продукта, то изменяется доступность всех продуктов продавца""",
+        request=ProductChangeAvailabilitySerializer, # Параметры теперь в теле запроса
         examples=[
             OpenApiExample(
                 'Пример запроса',
                 value={
                     "id": 1,
-                    "quantity": 2
-                },
-                status_codes=['200'],
+                    "is_available": True
+                }
+            )
+        ],
+        responses={
+            200: OpenApiResponse(
+                description="Доступность продукта изменена",
+                response=ProductChangeAvailabilitySerializer,
+                examples=[
+                    OpenApiExample(
+                        "Успешный ответ",
+                        value={"message": "Доступность продукта изменена"}
+                    )
+                ]
             ),
-        ]
-    ),
+            403: OpenApiResponse(
+                description="Нет прав",
+                response=ProductChangeAvailabilitySerializer,
+                examples=[
+                    OpenApiExample(
+                        "Ошибка",
+                        value={"message": "Недостаточно прав"}
+                    )
+                ]
+            ),
+            404: OpenApiResponse(
+                description="Продукт не найден",
+                response=ProductChangeAvailabilitySerializer,
+                examples=[
+                    OpenApiExample(
+                        "Ошибка",
+                        value={"message": "Продукт не найден"}
+                    )
+                ]
+            ),
+            422: OpenApiResponse(
+                description="Некорректные данные",
+                response=ProductChangeAvailabilitySerializer,
+                examples=[
+                    OpenApiExample(
+                        "Ошибка",
+                        value={"message": "Некорректные данные"}
+                    )
+                ]
+            ),
+            400: OpenApiResponse(
+                description="Недостаточно товара",
+                response=ProductChangeAvailabilitySerializer,
+                examples=[
+                    OpenApiExample(
+                        "Недостаточно товара",
+                        value={"message": "Недостаточное количество товара"}
+                    )
+                ]
+            ),
+            400: OpenApiResponse(
+                description="Продукт недоступен",
+                response=ProductChangeAvailabilitySerializer,
+                examples=[
+                    OpenApiExample(
+                        "Продукт недоступен",
+                        value={"message": "Продукт недоступен"}
+                    )
+                ]
+            )
+        }       
+    )
 )
 
 categories_view_schema = extend_schema_view(
@@ -308,6 +305,7 @@ categories_view_schema = extend_schema_view(
         tags=['Категории продуктов'],
         summary="Создать категорию",
         description="Создание новой категории (требуются права create_category)",
+        request=CategorySerializer, # Параметры теперь в теле запроса
         examples=[
             OpenApiExample(
                 'Пример запроса',
@@ -323,6 +321,15 @@ categories_view_schema = extend_schema_view(
         tags=['Категории продуктов'],
         summary="Удалить категорию",
         description="Удаление категории (требуются права delete_category)",
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='ID категории',
+                required=True
+            )
+        ],
         examples=[
             OpenApiExample(
                 'Пример запроса',
@@ -337,6 +344,7 @@ categories_view_schema = extend_schema_view(
         tags=['Категории продуктов'],
         summary="Обновить категорию",
         description="Обновление информации о категории (требуются права update_category)",
+        request=CategoryUpdateSerializer, # Параметры теперь в теле запроса
         examples=[
             OpenApiExample(
                 'Пример запроса',
@@ -423,6 +431,15 @@ cart_view_schema = extend_schema_view(
         tags=['Корзина'],
         summary="Удалить продукт из корзины",
         description="Удаление продукта из корзины по ID продукта",
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='ID продукта',
+                required=True
+            )
+        ],
         examples=[
             OpenApiExample(
                 'Пример запроса',
@@ -437,6 +454,7 @@ cart_view_schema = extend_schema_view(
         tags=['Корзина'],
         summary="Обновить продукт в корзине",
         description="Обновление количества продукта в корзине",
+        request=CartProductSearchSerializer, # Параметры теперь в теле запроса (id и quantity)
         examples=[
             OpenApiExample(
                 'Пример запроса',
@@ -452,6 +470,9 @@ cart_view_schema = extend_schema_view(
         tags=['Корзина'],
         summary="Оформить заказ",
         description="Оформление заказа из содержимого корзины",
+        # Здесь нет параметров для тела запроса, так как заказ оформляется из содержимого корзины,
+        # которая уже существует для пользователя. Если бы были дополнительные параметры для заказа,
+        # их можно было бы добавить через 'request'.
         responses={
             201: inline_serializer(
                 name='OrderResponse',
@@ -479,4 +500,4 @@ cart_view_schema = extend_schema_view(
 )
 
 
-__all__ = ['products_list_schema', 'categories_view_schema', 'cart_view_schema']
+__all__ = ['products_list_schema', 'categories_view_schema', 'cart_view_schema', 'products_change_schema']

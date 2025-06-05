@@ -12,6 +12,16 @@ def seller_user(db):
     )
 
 @pytest.fixture
+def buyer_user(db):
+    return MarketUser.objects.create_user(
+        username='buyer',
+        password='testpass',
+        user_type='Buyer'
+    )
+
+
+
+@pytest.fixture
 def product(seller_user):
     return Product.objects.create(
         name="Test Product",
@@ -33,3 +43,6 @@ def cart(buyer_user):
 def authenticated_seller_client(api_client, seller_user):
     api_client.force_authenticate(user=seller_user)
     return api_client
+
+
+

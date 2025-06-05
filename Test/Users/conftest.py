@@ -2,22 +2,22 @@ import pytest
 import requests
 from django.contrib.auth.models import Group
 from Products.models import Product, Category, Cart, CartProduct
-from Users.models import MarketUser, UserGroup
+from Users.models import MarketUser, UserGroup, Contact
 
-@pytest.fixture
-def buyer_group(db):
-    group, _ = UserGroup.objects.get_or_create(name='Buyer')
-    return group
+# @pytest.fixture
+# def buyer_group(db):
+#     group, _ = UserGroup.objects.get_or_create(name='Buyer')
+#     return group
 
-@pytest.fixture
-def seller_group(db):
-    group, _ = UserGroup.objects.get_or_create(name='Seller')
-    return group
+# @pytest.fixture
+# def seller_group(db):
+#     group, _ = UserGroup.objects.get_or_create(name='Seller')
+#     return group
 
-@pytest.fixture
-def admin_group(db):
-    group, _ = UserGroup.objects.get_or_create(name='Admin')
-    return group
+# @pytest.fixture
+# def admin_group(db):
+#     group, _ = UserGroup.objects.get_or_create(name='Admin')
+#     return group
 
 @pytest.fixture
 def buyer_user(db, buyer_group):
@@ -107,13 +107,34 @@ def category(db):
 def cart(buyer_user):
     return Cart.objects.create(user=buyer_user)
 
+@pytest.fixture
+def contact_data():
+    # Данные для создания контакта
+    return {
+        'city': 'Москва',
+        'street': 'Ленина',
+        'house': '10',
+        'structure': 'А',
+        'building': '2',
+        'apartment': '5',
+        'phone': '+79001234567'
+    }
+
+@pytest.fixture
+def create_contact(db, buyer_user, contact_data):
+    # Фикстура для создания контакта, привязанного к пользователю
+    contact = Contact.objects.create(user=buyer_user, **contact_data)
+    return contact
+
+
+
 
 
 
 __all__ = [
-    'buyer_group',
-    'seller_group',
-    'admin_group',
+    # 'buyer_group',
+    # 'seller_group',
+    # 'admin_group',
     'buyer_user',
     'seller_user',
     'admin_user',
@@ -123,5 +144,8 @@ __all__ = [
     'authenticated_admin_client',
     'product',
     'category',
-    'cart'
+    'cart',
+    'contact_data',
+    'create_contact'
 ]
+

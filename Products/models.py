@@ -57,7 +57,7 @@ class Parameters(models.Model):
     Поле products - продукты, у которых есть данный параметр
     """
     name = models.CharField(max_length=255)
-    value = models.CharField(max_length=255)
+    value = models.CharField(max_length=255, blank=True, null=True)
     product = models.ForeignKey('Product', on_delete=models.CASCADE, null=True, related_name='parameters')
 
     def __str__(self):
