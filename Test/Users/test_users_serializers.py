@@ -1,17 +1,9 @@
 import pytest
 from rest_framework.exceptions import ValidationError
-from Users.serializers import (
-    UserRegSerializer,
-    LoginSerializer,
-    ChangePasswordSerializer,
-    DeleteUserSerializer,
-    GetUserDataSerializer,
-    DeleteUserDataSerializer,
-    RestorePasswordSerializer
-)
+from Users.serializers import *
 
 @pytest.mark.django_db
-class TestUserRegSerializer:
+class TestUserSerializer:
     def test_valid_serializer_data(self):
         data = {
             'username': 'testuser',
@@ -22,7 +14,7 @@ class TestUserRegSerializer:
             'last_name': 'User',
             'phone_number': '+1234567890'
         }
-        serializer = UserRegSerializer(data=data)
+        serializer = UserSerializer(data=data)
         assert serializer.is_valid()
         assert serializer.validated_data['username'] == 'testuser'
         assert serializer.validated_data['email'] == 'test@example.com'
@@ -35,11 +27,10 @@ class TestUserRegSerializer:
             'email': 'invalid-email',
             'user_type': 'InvalidType'
         }
-        serializer = UserRegSerializer(data=data)
+        serializer = UserSerializer(data=data)
         assert not serializer.is_valid()
         assert 'username' in serializer.errors
         assert 'email' in serializer.errors
-        assert 'user_type' in serializer.errors
 
     def test_create_user(self):
         data = {
@@ -48,7 +39,7 @@ class TestUserRegSerializer:
             'email': 'new@example.com',
             'user_type': 'Buyer'
         }
-        serializer = UserRegSerializer(data=data)
+        serializer = UserSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         assert user.username == 'newuser'

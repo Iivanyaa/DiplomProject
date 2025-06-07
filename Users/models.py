@@ -6,7 +6,7 @@ from rest_framework import status
 
 class MarketUser(User):
     # поле для номера телефона
-    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    phone_number = models.CharField(max_length=20, blank=True, null=True, help_text='Номер телефона, максимум 20 символов')
         # это поле будет хранить номер телефона пользователя
     # тип пользователя (Buyer, Seller, Admin)
     USER_TYPES = (
@@ -19,7 +19,8 @@ class MarketUser(User):
         blank=True,  # поле может быть пустым
         null=True,  # поле может быть Null
         choices=USER_TYPES,  # типы пользователей
-        default='Buyer'  # по умолчанию - покупатель
+        default='Buyer',  # по умолчанию - покупатель
+        help_text='Тип пользователя. Seller - продавец, Buyer - покупатель, Admin - администратор. По умолчанию - покупатель'  
     )
     
     def AccessCheck(self, request, perm: str):
@@ -44,15 +45,16 @@ class UserGroup(Group):
 class Contact(models.Model):
     user = models.ForeignKey(User, verbose_name='Пользователь',
                              related_name='contacts', blank=True,
-                             on_delete=models.CASCADE)
+                             on_delete=models.CASCADE,
+                             help_text='Пользователь которому принадлежат контакты')
 
-    city = models.CharField(max_length=50, verbose_name='Город')
-    street = models.CharField(max_length=100, verbose_name='Улица')
-    house = models.CharField(max_length=15, verbose_name='Дом', blank=True)
-    structure = models.CharField(max_length=15, verbose_name='Корпус', blank=True)
-    building = models.CharField(max_length=15, verbose_name='Строение', blank=True)
-    apartment = models.CharField(max_length=15, verbose_name='Квартира', blank=True)
-    phone = models.CharField(max_length=20, verbose_name='Телефон')
+    city = models.CharField(max_length=50, verbose_name='Город', help_text='Город')
+    street = models.CharField(max_length=100, verbose_name='Улица', help_text='Улица')
+    house = models.CharField(max_length=15, verbose_name='Дом', blank=True, help_text='Дом')
+    structure = models.CharField(max_length=15, verbose_name='Корпус', blank=True, help_text='Корпус')
+    building = models.CharField(max_length=15, verbose_name='Строение', blank=True, help_text='Строение')
+    apartment = models.CharField(max_length=15, verbose_name='Квартира', blank=True, help_text='Квартира')
+    phone = models.CharField(max_length=20, verbose_name='Телефон', help_text='Телефон')
 
     class Meta:
         verbose_name = 'Контакты пользователя'

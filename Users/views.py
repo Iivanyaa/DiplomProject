@@ -16,40 +16,35 @@ from .schema import *
 @user_register_schema
 class UserRegisterView(APIView):
     def post(self, request):
-        # Создаем объект serializer, передаем ему данные из запроса
         """
         POST-запрос на регистрацию пользователя.
-
-        Параметры:
-        request (Request): объект запроса Django
-
-        Возвращает:
-        Response: объект ответа с созданным пользователем, если данные валидны,
-            или сообщение об ошибке, если данные не валидны.
+        Вся логика валидации и создания инкапсулирована в сериализаторе.
         """
+        serializer = UserSerializer(data=request.data)
 
-        serializer = UserRegSerializer(data=request.data)
-        # Проверяем, валидны ли данные
+        # is_valid() теперь выполняет все проверки, включая уникальность email/username
         if serializer.is_valid():
-            # проверяем, есть ли пользователь с таким логином или электронной почтой
-            if MarketUser.objects.filter(username=serializer.validated_data['username']).exists() or MarketUser.objects.filter(email=serializer.validated_data['email']).exists():
-                return Response({'message': 'Пользователь с таким логином или почтой уже существует'}, status=status.HTTP_400_BAD_REQUEST)
-            user = serializer.save()
-            # Добавляем пользователя в группу, которая соответствует типу пользователя
-            user_type = serializer.validated_data.get('user_type', 'Buyer')
-            UserGroup.objects.get(name=user_type).user_set.add(user)
-            # возвращаем ответ
+            # .save() вызовет наш переопределенный метод .create()
+            serializer.save()
             return Response(
-                {'message': 'Пользователь успешно зарегистрирован',
-                'data': serializer.validated_data},
+                {
+                    'message': 'Пользователь успешно зарегистрирован',
+                    # serializer.data теперь содержит данные созданного объекта
+                    # (без write_only полей, таких как пароль)
+                    'data': serializer.data
+                },
                 status=status.HTTP_201_CREATED
             )
-        # если данные не валидны, то возвращаем ошибки
+
+        # Если данные не валидны, возвращаем ошибки от сериализатора
+        # Используем статус 400, что является более стандартным для ошибок валидации
         return Response(
             {
                 'message': 'Неверные данные',
                 'errors': serializer.errors
-            }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
 # логин пользователя
 @user_login_schema
 class LoginView(APIView):
@@ -168,9 +163,13 @@ class DeleteUserView(APIView):
             пользователя, если пользователь имеет необходимые права, или
             сообщение об ошибке, если таких прав нет.
         """
-        serializer = DeleteUserSerializer(data=request.data)
+        serializer = DeleteUserSerializer(data=request.query_params)
+        print(serializer.is_valid())
+        print(serializer.validated_data)
+        print(request.query_params)
         # проверяем, есть ли в запросе id пользователя или username
-        if 'id' not in request.data and 'username' not in request.data:
+        if 'id' not in request.query_params and 'username' not in request.query_params or 'id' in request.query_params and request.query_params['id'] == str(request.session.get('user_id')) or 'username' in request.query_params and request.query_params['username'] == request.session.get('username'):
+            print('ничего нет в query_params либо id совпадает с id из сессии')
             # если нет, то удаляем текущего пользователя
             # Проверяем, имеет ли пользователь право на самоудаление
             if not MarketUser.AccessCheck(self, request=request, perm='Users.delete_self'):
@@ -181,14 +180,18 @@ class DeleteUserView(APIView):
             user.delete()
             # Возвращаем ответ, что пользователь успешно удален
             return Response({'message': 'Пользователь успешно удален'}, status=status.HTTP_200_OK, content_type='application/json')
+        print('в запросе есть id другого пользователя или username')
+        #проверяем не передал ли пользователь свой i
         # если в запросе есть id пользователя или username, то удаляем пользователя по id или username
         # Проверяем, имеет ли пользователь право на удаление пользователя
         if not MarketUser.AccessCheck(self, request=request, perm='Users.delete_user'):
+            print('проверку прав на удаление пользователя не прошли')
+            print(MarketUser.AccessCheck(self, request=request, perm='Users.delete_user'))
             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED, content_type='application/json')
+        print('проверку прав на удаление пользователя прошли')
         # удаляем пользователя по id или username
-        if serializer.is_valid(raise_exception=True):
-            user = MarketUser.objects.filter(**serializer.validated_data).first()
-            user.delete()
+        user = MarketUser.objects.get(id=request.query_params['id'] if 'id' in request.query_params else MarketUser.objects.get(username=request.query_params['username']).id)
+        user.delete()
         # Возвращаем ответ, что пользователь успешно удален
         return Response({'message': 'Пользователь успешно удален'}, status=status.HTTP_200_OK, content_type='application/json')
 
@@ -256,30 +259,41 @@ class DeleteUserDataView(APIView):
             об ошибке, если пользователь не аутентифицирован, не имеет прав,
             или данные пользователя не найдены.
         """
-
+        # Создаем объект serializer, передаем ему данные из запроса
+        serializer = DeleteUserDataSerializer(data=request.query_params)
+        print(request.query_params)
+        print(serializer.is_valid())
+        # Проверяем, что данные валидны
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         if request.session.get('user_id') is None:
             return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
         # Получаем ID пользователя из запроса, если он не указан, то используем ID из сессии
-        user_id = request.data.get('id') or request.session.get('user_id')
+        user_id = request.query_params.get('id') or request.session.get('user_id')
+        print(user_id)
         # проверяем наличие пользователя
-        if not MarketUser.objects.filter(id=user_id).exists():
+        try:
+            MarketUser.objects.get(id=user_id)
+            print(MarketUser.objects.get(id=user_id))
+        except MarketUser.DoesNotExist:
+            print('пользователь не нашелся')    
             return Response({'message': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
         # Проверяем наличия прав на удаление данных пользователя
         if user_id != request.session.get('user_id') and not MarketUser.AccessCheck(self, request=request, perm=perm):
+            print('проверку прав на удаление данных пользователя не прошли')
             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED)
         # Получаем объект пользователя по ID
         user = MarketUser.objects.get(id=user_id)
-        # Создаем объект serializer, передаем ему данные из запроса
-        serializer = DeleteUserDataSerializer(data=request.data)
-        # удаляем выбранные параметры пользователя в соответствии с данными сериализатора
-        if serializer.is_valid(raise_exception=True):
-            # Если данные валидны, удаляем указанные поля
-            for field in serializer.validated_data['data_to_delete']:
-                # Проверяем, существует ли поле у пользователя
-                if hasattr(user, field):
-                    # Удаляем поле
-                    setattr(user, field, None)
-                    user.save()
+        print(user)
+        # Удаляем выбранные данные
+        for field in serializer.validated_data['data_to_delete'].split(','):
+            print(field)
+            # Проверяем, существует ли поле у пользователя
+            if hasattr(user, field):
+                print(field)
+                # Удаляем поле
+                setattr(user, field, None)
+                user.save()
             
         # Возвращаем ответ, что данные успешно удалены
             return Response({'message': 'Данные пользователя успешно удалены'}, status=status.HTTP_200_OK)
@@ -329,7 +343,7 @@ class GetUserDataView(APIView):
         # Возвращаем данные пользователя
         return Response({
             'message': 'Данные пользователя успешно получены',
-            'данные пользователя':UserRegSerializer(user).data
+            'данные пользователя':UserSerializer(user).data
         }, status=status.HTTP_200_OK)
 
 
@@ -374,7 +388,7 @@ class RestorePasswordView(APIView):
             # Возвращаем ответ, что пароль успешно изменен
             return Response({'message': 'Пароль успешно изменен'}, status=status.HTTP_200_OK)
 
-
+@contact_schema
 class AddContactView(APIView):
     # вьюшка для добавления контакта
     def post(self, request, perm='Users.add_contact'):

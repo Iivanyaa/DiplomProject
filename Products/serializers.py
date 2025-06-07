@@ -1,18 +1,114 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from .models import Product, Category, Cart, CartProduct
+from .models import Product, Category, Cart, CartProduct, Parameters
+from Users.models import MarketUser
+
+
+class ParameterSerializer(serializers.ModelSerializer):
+    """
+    Сериализатор для модели Parameters.
+    Используется для обработки вложенных параметров продукта.
+    """
+    class Meta:
+        model = Parameters
+        fields = ['name', 'value']
 
 # сериализаторы для продуктов
 class ProductSerializer(serializers.ModelSerializer):
-    categories = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Category.objects.all(),
+    """
+    Сериализатор для модели Product.
+    Используется для валидации и сохранения данных о продуктах.
+    Также обрабатывает вложенные параметры и связь с продавцом и категориями.
+    """
+    # Вложенный сериализатор для параметров
+    parameters = ParameterSerializer(many=True, required=False)
+    
+    # Поле для записи seller_id (Primary Key), доступно только для записи
+    # seller_id = serializers.PrimaryKeyRelatedField(
+    #     queryset=MarketUser.objects.all(), source='seller', write_only=True, required=False
+    # )
+    # Поле для чтения имени пользователя продавца, доступно только для чтения
+    seller = serializers.CharField(source='seller.username', read_only=True)
+
+    # Поле для категорий, принимающее список id
+    categories = serializers.ListField(
+        allow_empty=True,
+        child=serializers.IntegerField(),
+        write_only=True,
         required=False
     )
+    # Поле для чтения названий категорий
+    category_names = serializers.SerializerMethodField()
     
+    # Сделаем поле description необязательным, так как оно может отсутствовать в YAML файле
+    description = serializers.CharField(required=False)
+
     class Meta:
         model = Product
-        fields = ['name', 'price', 'description', 'quantity', 'is_available', 'categories']
+        fields = [
+            'name', 'price', 'description', 'quantity', 'is_available',
+            'created_at', 'updated_at', 'seller', 'parameters',
+            'categories', 'category_names' # Добавлены поля для категорий
+        ]
+        # is_available и временные метки контролируются моделью или автоматически
+        read_only_fields = ['created_at', 'updated_at', 'is_available', 'category_names'] 
+
+    def get_category_names(self, obj):
+        """
+        Возвращает список названий категорий для продукта.
+        """
+        return [category.name for category in obj.categories.all()]
+
+    def create(self, validated_data):
+        """
+        Создает новый продукт и связанные с ним параметры и категории.
+        """
+        parameters_data = validated_data.pop('parameters', [])
+        category_names_data = validated_data.pop('categories', []) # Получаем названия категорий
+
+        # Если описание отсутствует, установим его в пустую строку
+        validated_data['description'] = validated_data.get('description', '')
+
+        product = Product.objects.create(**validated_data)
+
+        # Создание или связывание параметров
+        for param_data in parameters_data:
+            Parameters.objects.create(product=product, **param_data)
+
+        # Создание или связывание категорий
+        for category_name in category_names_data:
+            category, created = Category.objects.get_or_create(name=category_name)
+            product.categories.add(category) # Добавляем категорию к продукту
+
+        return product
+
+    def update(self, instance, validated_data):
+        """
+        Обновляет существующий продукт и его параметры и категории.
+        """
+        parameters_data = validated_data.pop('parameters', [])
+        category_names_data = validated_data.pop('categories', []) # Получаем названия категорий
+
+        # Обновление полей продукта
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save() # Метод save модели обновит is_available на основе quantity
+
+        # Обновление или создание параметров:
+        # Для простоты, мы удаляем все существующие параметры и создаем новые.
+        # Для более сложной логики можно сравнивать существующие и обновлять/добавлять/удалять.
+        instance.parameters.all().delete()
+        for param_data in parameters_data:
+            Parameters.objects.create(product=instance, **param_data)
+
+        # Обновление категорий:
+        # Удаляем все существующие категории и связываем заново
+        instance.categories.clear() # Очищаем текущие категории
+        for category_name in category_names_data:
+            category, created = Category.objects.get_or_create(name=category_name)
+            instance.categories.add(category) # Добавляем обновленные категории
+
+        return instance
 
 
 class ProductChangeAvailabilitySerializer(serializers.Serializer):
@@ -31,10 +127,9 @@ class ProductsListSerializer(ProductSerializer):
 class ProductSearchSerializer(serializers.Serializer):
     id = serializers.IntegerField(required=False, allow_null=True)
     name = serializers.CharField(required=False, allow_blank=True)
-    categories = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Category.objects.all(),
-        required=False
+    categories = serializers.CharField(
+        required=False,
+        allow_null=True
     )
 
     def validate(self, data):
@@ -146,8 +241,8 @@ class CategorySerializer(serializers.Serializer):
             )
         attrs = super().validate(data)
         # проверка на вхождение хотябы 1 значения
-        if not attrs.get('id') and not attrs.get('name'):
-            raise ValidationError("Укажите id или name для поиска.")
+        # if not attrs.get('id') and not attrs.get('name'):
+        #     raise ValidationError("Укажите id или name для поиска.")
         return attrs
 
 class CategorySearchSerializer(CategorySerializer):
@@ -186,6 +281,7 @@ class CartProductSearchSerializer(serializers.Serializer):
     
         return attrs
 
+
 class CreateParametersSerializer(serializers.Serializer):
     product_id = serializers.IntegerField(required=True, allow_null=False)
     name = serializers.CharField(required=True, allow_null=False)
@@ -198,6 +294,18 @@ class DeleteParametersSerializer(serializers.Serializer):
     product_id = serializers.IntegerField(required=True, allow_null=False)
     parameters_id = serializers.IntegerField(required=False, allow_null=True)
 
+class ProductImportSerializer(serializers.Serializer):
+    file = serializers.FileField(required=True)
+
+class ProductImportErrorSerializer(serializers.Serializer):
+    message = serializers.CharField(required=True)
+    errors = serializers.ListField(required=True)
+    imported_count = serializers.IntegerField(required=True)
+    updated_count = serializers.IntegerField(required=True)
+
+class ProductImportSuccessSerializer(serializers.Serializer):
+    imported_count = serializers.IntegerField(required=True)
+    updated_count = serializers.IntegerField(required=True)
 
 
 __all__ = [
@@ -215,5 +323,10 @@ __all__ = [
     'ProductChangeAvailabilitySerializer',
     'CreateParametersSerializer',
     'UpdateParametersSerializer',
-    'DeleteParametersSerializer'
+    'DeleteParametersSerializer',
+    'ProductImportSerializer',
+    'ParameterSerializer',
+    'ProductImportSerializer',
+    'ProductImportErrorSerializer',
+    'ProductImportSuccessSerializer'
 ]

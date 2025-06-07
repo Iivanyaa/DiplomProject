@@ -1,29 +1,64 @@
 from django.forms import ValidationError
 from rest_framework import serializers
-from .models import MarketUser, Contact
+from .models import MarketUser, Contact, UserGroup
 from django.contrib.auth.hashers import make_password
 
 
 class UserSerializer(serializers.ModelSerializer):
+    # Добавляем поле user_type, которое используется только для записи,
+    # но не является частью модели MarketUser
+    user_type = serializers.CharField(write_only=True, required=False, default='Buyer')
+
     class Meta:
         model = MarketUser
-        password = serializers.CharField(write_only=True, min_length=8)
-        fields = ['username', 'password', 'email']
+        # Явно указываем поля, которые используем
+        fields = ['id', 'username', 'email', 'password', 'first_name', 'last_name', 'user_type', 'phone_number']
+        extra_kwargs = {
+            # 'password' должно быть только для записи (не отдается в ответе)
+            'password': {'write_only': True},
+            # 'id' должно быть только для чтения (не принимается в запросе)
+            'id': {'read_only': True}
+        }
+
+    # DRF автоматически вызовет этот метод для валидации поля 'email'
+    def validate_email(self, value):
+        if MarketUser.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Пользователь с такой почтой уже существует.")
+        return value
+
+    # DRF автоматически вызовет этот метод для валидации поля 'username'
+    def validate_username(self, value):
+        if MarketUser.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Пользователь с таким логином уже существует.")
+        return value
 
     def create(self, validated_data):
-        validated_data['password'] = make_password(validated_data['password'])
-        return super().create(validated_data)
+        """
+        Переопределяем метод создания, чтобы корректно обработать
+        создание пользователя и добавление его в группу.
+        """
+        # Извлекаем user_type, он нам не нужен для создания MarketUser
+        user_type_name = validated_data.pop('user_type', 'Buyer')
 
-    def update(self, instance, validated_data):
-        if 'password' in validated_data:
-            validated_data['password'] = make_password(validated_data['password'])
-        return super().update(instance, validated_data)
+        # Используем create_user для правильного хеширования пароля
+        user = MarketUser.objects.create_user(**validated_data)
 
-class UserRegSerializer(UserSerializer):
-    class Meta:
-        model = MarketUser
-        fields = ['user_type', 'email', 'password', 'username', 'first_name', 'last_name', 'phone_number']
+        # Добавляем пользователя в группу
+        try:
+            group = UserGroup.objects.get(name=user_type_name)
+            group.user_set.add(user)
+        except UserGroup.DoesNotExist:
+            # Эту ошибку стоит логировать, т.к. это проблема конфигурации сервера
+            print(f"Внимание: Группа '{user_type_name}' не найдена.")
+            pass
 
+        return user
+
+# class UserRegSerializer(UserSerializer):
+#     class Meta:
+#         model = MarketUser
+#         fields = ['user_type', 'email', 'password', 'username', 'first_name', 'last_name', 'phone_number']
+#         write_only_fields = ('password')
 
 class UserUpdateSerializer(UserSerializer):
     class Meta:
@@ -255,7 +290,7 @@ class GetContactSerializer(serializers.ModelSerializer):
 
 __all__ = [
     'UserSerializer',
-    'UserRegSerializer',
+    # 'UserRegSerializer',
     'GetUserDataSerializer',
     'DeleteUserDataSerializer',
     'RestorePasswordSerializer',

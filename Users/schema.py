@@ -1,39 +1,37 @@
 from drf_spectacular.utils import (
     extend_schema,
+    extend_schema_view,
+    inline_serializer,
     OpenApiResponse,
     OpenApiExample,
     OpenApiParameter
 )
 from drf_spectacular.types import OpenApiTypes
-from Users.serializers import (
-    UserRegSerializer,
-    LoginSerializer,
-    ChangePasswordSerializer,
-    DeleteUserSerializer,
-    GetUserDataSerializer, # Assuming this serializer is used for retrieving user data in the body if needed
-    DeleteUserDataSerializer,
-    RestorePasswordSerializer,
-    UserUpdateSerializer,
-)
+from Users.serializers import *
 
 
 user_register_schema = extend_schema(
     tags=['Пользователи'],
     summary="Регистрация нового пользователя",
-    description="Создает нового пользователя (покупателя, продавца или администратора)",
-    request=UserRegSerializer,  # Parameters are defined in UserRegSerializer
+    description="""Создает нового пользователя (покупателя, продавца или администратора),
+                   Требуются права `Users.add_user`.
+                   Принимает user_type, email, password, username, first_name, last_name, phone_number
+                   Проверяется уникальность email и username.
+
+    """,
+    request=UserSerializer,
     responses={
         201: OpenApiResponse(
-            description="Успешная регистрация",
-            response=UserRegSerializer,
+            description="Пользовтель успешно зарегистрирован",
+            response=UserSerializer,
             examples=[
                 OpenApiExample(
                     "Пользователь успешно зарегистрирован",
                     value={
                         "message": "Пользователь успешно зарегистрирован",
                         "data": {
+                            "user_type": "Buyer",
                             "email": "user@example.com",
-                            "password": "new_user",
                             "username": "Cappucino",
                             "first_name": "string",
                             "last_name": "string",
@@ -43,17 +41,17 @@ user_register_schema = extend_schema(
                 )
             ]
         ),
-        422: OpenApiResponse(
-            description="Ошибка валидации",
-            response=UserRegSerializer,
+        400: OpenApiResponse(
+            description="Неверные данные",
+            response=UserSerializer,
             examples=[
                 OpenApiExample(
-                    "Ошибка валидации", # Corrected key from 'valuse' to 'value'
+                    "Неверные данные",
                     value={
                         "message": "Неверные данные",
                         "errors": {
-                            "email": [
-                                "user with this email address already exists."
+                            "username": [
+                                "A user with that username already exists."
                             ]
                         }
                     }
@@ -169,11 +167,18 @@ delete_user_schema = extend_schema(
     tags=['Пользователи'],
     summary="Удаление пользователя",
     description="Удаляет текущего пользователя или другого (для админов)",
-    request={'application/json': DeleteUserSerializer},
+    parameters=[
+        OpenApiParameter(
+            name='id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description='ID пользователя',
+        )
+    ],
     examples=[
         OpenApiExample(
             "Удаление текущего пользователя",
-            value={"id": 1},
+            value={},
             status_codes=['200'],
             summary="Удаление текущего пользователя",
             description="Удаление текущего пользователя (требуются права delete_user)",
@@ -341,28 +346,26 @@ delete_user_data_schema = extend_schema(
     tags=['Пользователи'],
     summary="Удаление данных пользователя",
     description="""Очищает указанные поля пользователя (email, phone и т.д.). 
-                   Принимает название полей в data_to_delete либо список полей. 
+                   Принимает название полей в data_to_delete либо список полей.
+                   Админы могут удалять данные других пользователей по id. 
                    Требуется аутентификация и права delete_user_data""",
     parameters=[
         OpenApiParameter(
             name='id',
             type=OpenApiTypes.INT,
             location=OpenApiParameter.QUERY,
-            description='ID пользователя',
-            required=False
+            description='ID пользователя'
         ),
         OpenApiParameter(
             name='data_to_delete',
             type=OpenApiTypes.STR,
             location=OpenApiParameter.QUERY,
-            description='поля, которые нужно удалить',
-            required=False
+            description='Название поля или список полей, которые нужно удалить'
         )
     ],
     responses={
         200: OpenApiResponse(
             description="Данные удалены",
-            response=DeleteUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Успешный ответ",
@@ -372,7 +375,6 @@ delete_user_data_schema = extend_schema(
         ),
         400: OpenApiResponse(
             description="Ошибка валидации",
-            response=DeleteUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -382,7 +384,6 @@ delete_user_data_schema = extend_schema(
         ),
         401: OpenApiResponse(
             description="Не авторизован",
-            response=DeleteUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -392,7 +393,6 @@ delete_user_data_schema = extend_schema(
         ),
         403: OpenApiResponse(
             description="Нет прав",
-            response=DeleteUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -402,7 +402,6 @@ delete_user_data_schema = extend_schema(
         ),
         404: OpenApiResponse(
             description="Пользователь не найден",
-            response=DeleteUserDataSerializer,
             examples=[
                 OpenApiExample(
                     "Ошибка",
@@ -417,7 +416,9 @@ delete_user_data_schema = extend_schema(
 get_user_data_schema = extend_schema(
     tags=['Пользователи'],
     summary="Получение данных пользователя",
-    description="Возвращает информацию о пользователе (для себя или админов)",
+    description="""Возвращает информацию о пользователе (Админы могут получать данные 
+                    других пользователей, нужны права get_user_data).
+                    Для получения данных другого пользователя нужно передать id""",
     parameters=[
         OpenApiParameter(
             name='id',
@@ -428,8 +429,8 @@ get_user_data_schema = extend_schema(
     ],
     responses={
         200: OpenApiResponse(
-            description="Данные получены",
-            response=GetUserDataSerializer, # Assuming UserRegSerializer is the response format
+            description="Данные пользователя успешно получены",
+            response=UserSerializer, # Assuming UserSerializer is the response format
             examples=[
                 OpenApiExample(
                     "Успешный ответ",
@@ -467,8 +468,8 @@ get_user_data_schema = extend_schema(
 restore_password_schema = extend_schema(
     tags=['Пользователи'],
     summary="Восстановление пароля",
-    description="Генерирует новый пароль и отправляет на email",
-    request=RestorePasswordSerializer,  # 'email' expected in RestorePasswordSerializer
+    description="Генерирует новый пароль и отправляет на email. Для работы функции необходима настрйка сервера почты",
+    request=RestorePasswordSerializer,  # 
     responses={
         200: OpenApiResponse(
             description="Пароль изменен",
@@ -503,6 +504,139 @@ restore_password_schema = extend_schema(
     }
 )
 
+contact_schema = extend_schema_view(
+    post=extend_schema(
+        tags=['Контакты пользователя'], 
+        summary="Добавление нового контакта",
+        description="""
+        Добавляет новый контакт для текущего пользователя.
+        Требует прав: Users.add_contact
+        Максимальное количество контактов - 5.
+        """,
+        request=AddContactSerializer,
+        responses={
+            200: OpenApiTypes.OBJECT,
+            400: OpenApiTypes.OBJECT,
+            401: OpenApiTypes.OBJECT,
+            422: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample(
+                'Успешное добавление',
+                value={'message': 'Контакт успешно добавлен'},
+                response_only=True,
+                status_codes=['200']
+            ),
+            OpenApiExample(
+                'Ошибка валидации',
+                value={'message': 'Обязательные поля не заполнены'},
+                response_only=True,
+                status_codes=['422']
+            ),
+            OpenApiExample(
+                'Ошибка прав',
+                value={'message': 'Недостаточно прав'},
+                response_only=True,
+                status_codes=['401']
+            ),
+            OpenApiExample(
+                'Превышение лимита',
+                value={'message': 'Превышено максимальное количество контактов'},
+                response_only=True,
+                status_codes=['400']
+            ),
+        ]
+    ),
+    put=extend_schema(
+        tags=['Контакты пользователя'],
+        summary="Изменение контакта",
+        description="""
+        Изменяет существующий контакт по ID.
+        Требует прав: Users.change_contact
+        """,
+        request=UpdateContactSerializer,
+        responses={
+            200: OpenApiTypes.OBJECT,
+            401: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT,
+            422: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample(
+                'Успешное изменение',
+                value={'message': 'Контакт успешно изменен'},
+                response_only=True,
+                status_codes=['200']
+            ),
+            OpenApiExample(
+                'Контакт не найден',
+                value={'message': 'Контакт не найден'},
+                response_only=True,
+                status_codes=['404']
+            ),
+        ]
+    ),
+    delete=extend_schema(
+        tags=['Контакты пользователя'],
+        summary="Удаление контакта",
+        description="""
+        Удаляет контакт по ID.
+        Требует прав: Users.delete_contact
+        """,
+        request=DeleteContactSerializer,
+        responses={
+            200: OpenApiTypes.OBJECT,
+            401: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample(
+                'Успешное удаление',
+                value={'message': 'Контакт успешно удален'},
+                response_only=True,
+                status_codes=['200']
+            ),
+        ]
+    ),
+    get=extend_schema(
+        tags=['Контакты пользователя'],
+        summary="Получение контакта(ов)",
+        description="""
+        Получает контакт по ID или все контакты пользователя.
+        Требует прав: Users.view_contact
+        """,
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='ID контакта (необязательный)',
+                required=False
+            ),
+        ],
+        responses={
+            200: OpenApiTypes.OBJECT,
+            401: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT,
+            422: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample(
+                'Успешное получение одного контакта',
+                value={'contact': {'id': 1, 'name': 'Иван', 'phone': '+79991234567'}},
+                response_only=True,
+                status_codes=['200']
+            ),
+            OpenApiExample(
+                'Успешное получение всех контактов',
+                value={'contacts': [{'id': 1, 'name': 'Иван', 'phone': '+79991234567'}, {'id': 2, 'name': 'Петр', 'phone': '+79997654321'}]},
+                response_only=True,
+                status_codes=['200']
+            ),
+        ]
+    ),
+)
+        
 
 __all__ = [
     'get_user_data_schema',
@@ -513,5 +647,6 @@ __all__ = [
     'user_change_password_schema',
     'delete_user_schema',
     'user_login_schema',
-    'user_logout_schema'
+    'user_logout_schema',
+    'contact_schema'
 ]

@@ -12,6 +12,9 @@ from rest_framework import status, serializers
 from django.core.mail import send_mail
 import os
 from .schema import *
+import yaml
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 
 # Документация для ProductsView
 @products_list_schema
@@ -33,7 +36,7 @@ class ProductsView(APIView):
             об ошибке, если продукты не найдены.
         """
         
-        serializer = ProductSearchSerializer(data=request.data)
+        serializer = ProductSearchSerializer(data=request.query_params)
 
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -47,12 +50,37 @@ class ProductsView(APIView):
                              'products': ProductsListSerializer(products, many=True).data
                              }, status=status.HTTP_200_OK)
         
-        # если передана категория, выводим список продуктов в этой категории
+        # если передан список категорий, выводим список продуктов в этих категориях
         if 'categories' in serializer.validated_data:
-            products = Product.objects.filter(categories__in=serializer.validated_data['categories'])
-            return Response({'message': 'Продукты в категории',
-                             'products': ProductsListSerializer(products, many=True).data
-                             }, status=status.HTTP_200_OK)
+            queryset = Product.objects.prefetch_related('categories').all()
+
+            # Получаем параметр 'categories' из URL
+            categories_param = request.query_params.get('categories')
+
+            if categories_param:
+                # Параметр может быть как одним ID '1', так и несколькими '1,2,3'.
+                # Разбиваем строку по запятым, чтобы получить список строк с ID.
+                category_ids_str = categories_param.split(',')
+
+                try:
+                    # Преобразуем список строк с ID в список целых чисел.
+                    # Это именно тот список, который ожидает фильтр '__in'.
+                    category_ids = [int(cat_id) for cat_id in category_ids_str]
+                except (ValueError, TypeError):
+                    # Если преобразование не удалось, значит, входные данные некорректны (например, "abc")
+                    return Response(
+                        {"error": "Неверный формат ID категории. Пожалуйста, укажите ID в виде чисел, разделенных запятыми."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Фильтруем queryset, используя список целочисленных ID.
+                # вызов .distinct() важен, чтобы избежать дублирования продуктов,
+                # если один продукт принадлежит к нескольким запрошенным категориям.
+                queryset = queryset.filter(categories__id__in=category_ids).distinct()
+
+            # Сериализуем итоговый queryset и возвращаем ответ
+            serializer = ProductSerializer(queryset, many=True)
+            return Response(serializer.data)
         
         # если категория не передана ищем продукт по id или названию
         products = Product.objects.filter(**serializer.validated_data)
@@ -64,7 +92,6 @@ class ProductsView(APIView):
         return Response({'message': 'Продукт найден',
                          'product': ProductSerializer(product).data
                          }, status=status.HTTP_200_OK)
-    
     # вьюшка для создания продукта
     def post(self, request, perm='Users.add_product'):
         """
@@ -81,6 +108,8 @@ class ProductsView(APIView):
         """
         serializer = ProductSerializer(data=request.data)
         print(serializer.is_valid())
+        print(serializer.errors)
+        print(serializer.validated_data)
         if not serializer.is_valid:
             return Response(serializer.errors, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
@@ -158,7 +187,8 @@ class ProductsView(APIView):
         # если изменена цена, то уведомляем админов
         if 'price' in update_data:
             for user in MarketUser.objects.filter(user_type='Admin'):
-                user.email_user('Цена продукта изменена', f"Цена продукта {product.name} была изменена на {product.price}")
+                user.email_user('Цена продукта изменена', f"Цена продукта {product.name} была изменена на {product.price}",
+                fail_silently=True)
 
         return Response(
             {"message": "Продукт успешно изменен",
@@ -277,7 +307,7 @@ class ProductsChangeView(APIView):
         # если id продукта не передан, то меняем is_available всех продуктов продавца
         if 'id' not in serializer.validated_data:
             print('id нет в данных, меняем is_available всех продуктов продавца')
-            Product.objects.filter(seller=request.user).update(is_available=request.data['is_available'])
+            Product.objects.filter(seller=MarketUser.objects.get(id=request.session.get('user_id'))).update(is_available=request.data['is_available'])
             return Response({'message': 'Доступность продуктов успешно изменена'}, status=status.HTTP_200_OK)
         # если id продукта передан, то меняем is_available конкретного продукта
         print('id есть в данных, меняем is_available конкретного продукта')
@@ -301,7 +331,7 @@ class ProductsChangeView(APIView):
             return Response({'message': 'ID продукта не передан'}, status=status.HTTP_400_BAD_REQUEST)
         print('id есть в данных, добавляем параметры конкретного продукта')
         # проверяем, что продукт относится к продавцу
-        if serializer.validated_data['product_id'] not in Product.objects.filter(seller=request.user).values_list('id', flat=True):
+        if serializer.validated_data['product_id'] not in Product.objects.filter(seller=MarketUser.objects.get(id=request.session.get('user_id'))).values_list('id', flat=True):
             print('продукт относится к другому продавцу')
             return Response({'message': 'Продукт относится к другому продавцу'}, status=status.HTTP_400_BAD_REQUEST)
         print('все проверки прошли, добавляем параметры конкретного продукта')
@@ -329,7 +359,7 @@ class ProductsChangeView(APIView):
             Product.objects.get(id=serializer.validated_data['product_id']).parameters.clear()
             return Response({'message': 'Параметры продукта успешно удалены'}, status=status.HTTP_200_OK)   
         # проверяем, что продукт относится к продавцу
-        if serializer.validated_data['product_id'] not in Product.objects.filter(seller=request.user).values_list('id', flat=True):
+        if serializer.validated_data['product_id'] not in Product.objects.filter(seller=MarketUser.objects.get(id=request.session.get('user_id'))).values_list('id', flat=True):
             return Response({'message': 'Продукт относится к другому продавцу'}, status=status.HTTP_400_BAD_REQUEST)
         # если id параметра передан, то пробуем его получить
         try:
@@ -356,7 +386,7 @@ class ProductsChangeView(APIView):
             print('id продукта не передан')
             return Response({'message': 'ID продукта не передан'}, status=status.HTTP_400_BAD_REQUEST)
         # проверяем, что продукт относится к продавцу
-        if serializer.validated_data['product_id'] not in Product.objects.filter(seller=request.user).values_list('id', flat=True):
+        if serializer.validated_data['product_id'] not in Product.objects.filter(seller=MarketUser.objects.get(id=request.session.get('user_id'))).values_list('id', flat=True):
             print('продукт относится к другому продавцу')
             return Response({'message': 'Продукт относится к другому продавцу'}, status=status.HTTP_400_BAD_REQUEST)
         # если id продукта передан, то изменяем параметры конкретного продукта
@@ -373,6 +403,209 @@ class ProductsChangeView(APIView):
         )
         return Response({'message': 'Параметры продукта успешно изменены'}, status=status.HTTP_200_OK)
 
+    # вьюшка для импорта товаров из xml файла продавца
+
+@product_import_schema
+class ProductImportView(APIView):
+    """
+    API-эндпоинт для импорта продуктов из файла YAML.
+
+    Ожидает POST-запрос с файлом YAML, содержащим информацию о магазине,
+    категориях и товарах, как в shop1.yaml.
+
+    Пример YAML-файла (с учетом новой структуры, продавца, параметров и КАТЕГОРИЙ):
+    shop: Связной
+    categories:
+      - id: 224
+        name: Смартфоны
+      - id: 5
+        name: Телевизоры
+    goods:
+      - id: 4216292
+        category: 224
+        model: apple/iphone/xs-max
+        name: Смартфон Apple iPhone XS Max 512GB (золотистый)
+        price: 110000
+        quantity: 14
+        parameters:
+          "Диагональ (дюйм)": 6.5
+          "Разрешение (пикс)": 2688x1242
+          "Встроенная память (Гб)": 512
+          "Цвет": золотистый
+      - id: 1234572
+        category: 5
+        model: samsung/qled-q90r
+        name: Samsung QLED Q90R 65" 4K UHD Smart TV
+        price: 2500
+        quantity: 4
+        parameters:
+          "Screen Size (inches)": 65
+          "Resolution (pixels)": 3840x2160
+          "Smart TV": true
+    """
+    parser_classes = (MultiPartParser, FormParser) # Разрешает загрузку файлов
+
+    def post(self, request, perm='Users.add_product'):
+        """
+        Обрабатывает POST-запрос для импорта продуктов.
+        """
+        # Проверяем, имеет ли пользователь право на импорт продуктов
+        if not MarketUser.AccessCheck(self, request, perm):
+            return Response({'message': 'Недостаточно прав'}, status=status.HTTP_403_FORBIDDEN)
+        # Проверяем, был ли загружен файл
+        if 'file' not in request.FILES:
+            return Response(
+                {"error": "Файл YAML не был предоставлен. Пожалуйста, загрузите файл с именем 'file'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        yaml_file = request.FILES['file']
+
+        # Проверяем расширение файла, чтобы убедиться, что это YAML
+        if not yaml_file.name.endswith(('.yaml', '.yml')):
+            return Response(
+                {"error": "Неверный тип файла. Пожалуйста, загрузите файл .yaml или .yml."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Читаем содержимое файла
+            file_content = yaml_file.read().decode('utf-8')
+            # Загружаем данные из YAML
+            full_data = yaml.safe_load(file_content)
+        except yaml.YAMLError as e:
+            return Response(
+                {"error": f"Ошибка парсинга YAML-файла: {e}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Неизвестная ошибка при чтении файла: {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        if not isinstance(full_data, dict) or 'goods' not in full_data:
+            return Response(
+                {"error": "Ожидаемый формат YAML-файла: словарь с ключом 'goods', содержащим список продуктов."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        products_data = full_data.get('goods', [])
+        categories_data = full_data.get('categories', [])
+
+        if not isinstance(products_data, list):
+            return Response(
+                {"error": "Ключ 'goods' в YAML-файле должен содержать список продуктов."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Создаем карту ID категорий к их названиям
+        category_id_to_name_map = {cat['id']: cat['name'] for cat in categories_data if 'id' in cat and 'name' in cat}
+
+        imported_products_count = 0
+        updated_products_count = 0
+        errors = []
+
+        # Получаем текущего аутентифицированного пользователя
+        current_user = MarketUser.objects.get(id=request.session.get('user_id')) if MarketUser.AccessCheck(self, request, 'Users.add_product') else None
+        
+        # Обрабатываем каждый продукт в списке
+        for item_data_raw in products_data:
+            # Создаем копию для модификации без изменения исходных данных
+            item_data = item_data_raw.copy()
+
+            if not isinstance(item_data, dict):
+                errors.append({"item": item_data_raw, "error": "Элемент списка 'goods' должен быть словарем."})
+                continue
+
+            # Определяем продавца для этого продукта
+            seller_to_use = None
+            if 'seller_id' in item_data: # Если seller_id указан в YAML
+                try:
+                    seller_to_use = MarketUser.objects.get(pk=item_data['seller_id'])
+                except MarketUser.DoesNotExist:
+                    errors.append({"item": item_data_raw, "error": f"Продавец с ID {item_data['seller_id']} не найден."})
+                    continue
+            elif current_user: # Если seller_id не указан, используем текущего аутентифицированного пользователя
+                seller_to_use = current_user
+            else:
+                errors.append({"item": item_data_raw, "error": "Продавец не указан в YAML и пользователь не аутентифицирован."})
+                continue
+
+            # Добавляем seller_id в данные для сериализатора
+            item_data['seller_id'] = seller_to_use.pk
+
+            # Преобразование параметров: из словаря в список {'name': ..., 'value': ...}
+            transformed_parameters = []
+            if 'parameters' in item_data and isinstance(item_data['parameters'], dict):
+                for param_name, param_value in item_data['parameters'].items():
+                    transformed_parameters.append({'name': param_name, 'value': str(param_value)})
+            item_data['parameters'] = transformed_parameters
+
+            # Преобразование категорий: из ID в список названий
+            transformed_categories = []
+            if 'category' in item_data:
+                category_id = item_data['category']
+                category_name = category_id_to_name_map.get(category_id)
+                if category_name:
+                    transformed_categories.append(category_name)
+                else:
+                    errors.append({"item": item_data_raw, "error": f"Категория с ID {category_id} не найдена в верхнеуровневом списке категорий."})
+                    # Продолжаем, чтобы не прерывать импорт из-за одной отсутствующей категории
+            item_data['categories'] = transformed_categories
+            
+            # Удаляем поля, которые не соответствуют модели Product напрямую
+            # (id, model, price_rrc, category) - они были обработаны или не нужны
+            item_data.pop('id', None)
+            item_data.pop('model', None)
+            item_data.pop('price_rrc', None)
+            item_data.pop('category', None) # Удаляем исходный ID категории
+
+
+            # Попытка найти существующий продукт по 'name' и 'seller'
+            existing_product = None
+            if 'name' in item_data:
+                try:
+                    existing_product = Product.objects.get(name=item_data['name'], seller=seller_to_use)
+                except Product.DoesNotExist:
+                    pass
+                except Product.MultipleObjectsReturned:
+                    # Этого не должно произойти, если unique_together=('name', 'seller') установлено
+                    errors.append({"item": item_data_raw, "error": f"Найдено несколько продуктов с именем '{item_data['name']}' для продавца '{seller_to_use.username}'."})
+                    continue
+            else:
+                errors.append({"item": item_data_raw, "error": "Отсутствует обязательное поле 'name' для продукта."})
+                continue
+
+            if existing_product:
+                # Если продукт существует, обновляем его
+                serializer = ProductSerializer(existing_product, data=item_data, partial=True)
+                if serializer.is_valid():
+                    serializer.save()
+                    updated_products_count += 1
+                else:
+                    errors.append({"item": item_data_raw, "error": serializer.errors})
+            else:
+                # Если продукт не существует, создаем новый
+                serializer = ProductSerializer(data=item_data)
+                if serializer.is_valid():
+                    serializer.save()
+                    imported_products_count += 1
+                else:
+                    errors.append({"item": item_data_raw, "error": serializer.errors})
+
+        response_data = {
+            "message": "Импорт продуктов завершен.",
+            "imported_count": imported_products_count,
+            "updated_count": updated_products_count,
+            "errors": errors,
+        }
+
+        if errors:
+            # Возвращаем 207 Multi-Status, если были ошибки, но некоторые продукты были обработаны
+            return Response(response_data, status=status.HTTP_207_MULTI_STATUS)
+        else:
+            return Response(response_data, status=status.HTTP_200_OK)
 
 # Документация для CategoriesView
 @categories_view_schema
@@ -473,7 +706,7 @@ class CategoriesView(APIView):
         Response: объект ответа с данными категории, если категория найдена,
             или сообщение об ошибке, если категория не найдена
         """
-        serializer = CategoryGetSerializer(data=request.data)
+        serializer = CategoryGetSerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         # проверяем имеет ли пользователь право на получение категории
         if not MarketUser.AccessCheck(self, request, perm):
@@ -490,7 +723,6 @@ class CategoriesView(APIView):
         # если категория найдена, возвращаем ее
         category = categories.first()
         return Response({'message': 'Категория найдена', 'id': category.id, 'name': category.name}, status=status.HTTP_200_OK)
-
 
 # Документация для CartView
 @cart_view_schema

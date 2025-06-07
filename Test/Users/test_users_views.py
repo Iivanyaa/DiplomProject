@@ -49,7 +49,7 @@ class TestUserRegisterView:
             'email': 'invalid-email'
         }
         response = api_client.post(self.url, data, format='json')
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'username' in response.data['errors'].keys()
         assert 'email' in response.data['errors'].keys()
 
@@ -138,40 +138,31 @@ class TestDeleteUserView:
 
     # Покупатель успешно удаляет свой профиль
     def test_delete_user_success(self, authenticated_buyer_client, buyer_user):
-        response = authenticated_buyer_client.delete(self.url)
+        response = authenticated_buyer_client.delete(f"{self.url}?id={buyer_user.id}")
         assert response.status_code == status.HTTP_200_OK
         assert not MarketUser.objects.filter(id=buyer_user.id).exists()
 
     # Админ успешно удаляет профиль покупателя по id
     def test_delete_user_by_id(self, authenticated_admin_client, buyer_user):
-        data = {
-            'id': buyer_user.id
-        }
-        response = authenticated_admin_client.delete(self.url, data, format='json')
+        response = authenticated_admin_client.delete(f"{self.url}?id={buyer_user.id}")
         assert response.status_code == status.HTTP_200_OK
         assert not MarketUser.objects.filter(id=buyer_user.id).exists()
 
     # Админ успешно удаляет профиль покупателя по username
     def test_delete_user_by_username(self, authenticated_admin_client, buyer_user):
-        data = {
-            'username': buyer_user.username
-        }
-        response = authenticated_admin_client.delete(self.url, data, format='json')
+        response = authenticated_admin_client.delete(f"{self.url}?username={buyer_user.username}")
         assert response.status_code == status.HTTP_200_OK
         assert not MarketUser.objects.filter(id=buyer_user.id).exists()
 
     # продавец безуспешно пытается удалить чужой профиль по id, но у него недостаточно прав
     def test_delete_user_insufficient_permissions(self, authenticated_seller_client, buyer_user):
-        data = {
-            'id': buyer_user.id
-        }
-        response = authenticated_seller_client.delete(self.url, data, format='json')
+        response = authenticated_seller_client.delete(f"{self.url}?id={buyer_user.id}")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert 'Недостаточно прав' in response.data['message']
 
     # неавторизированный пользователь пытается удаляить себя, но у него недостаточно прав
-    def test_delete_user_unauthenticated(self, api_client):
-        response = api_client.delete(self.url)
+    def test_delete_user_unauthenticated(self, api_client, buyer_user):
+        response = api_client.delete(f"{self.url}?id={buyer_user.id}")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert 'Недостаточно прав' in response.data['message']
 
@@ -245,10 +236,7 @@ class TestDeleteUserDataView:
         buyer_user.save()
         
         # Удаляем данные текущего пользователя
-        data = {
-            'data_to_delete': ['phone_number']
-        }
-        response = authenticated_buyer_client.delete(self.url, data, format='json')
+        response = authenticated_buyer_client.delete(f"{self.url}?data_to_delete=phone_number", format='json')
         assert response.status_code == status.HTTP_200_OK
         buyer_user.refresh_from_db()
         assert buyer_user.phone_number is None
@@ -258,41 +246,26 @@ class TestDeleteUserDataView:
         buyer_user.save()
         
         # Удаляем данные пользователя
-        data = {
-            'id': buyer_user.id,
-            'data_to_delete': ['phone_number']
-        }
-        response = authenticated_admin_client.delete(self.url, data, format='json')
+        response = authenticated_admin_client.delete(f"{self.url}?id={buyer_user.id}&data_to_delete=phone_number", format='json')
         assert response.status_code == status.HTTP_200_OK
         buyer_user.refresh_from_db()
         assert buyer_user.phone_number is None
         
     def test_delete_user_data_by_id_insufficient_permissions(self, authenticated_seller_client, buyer_user):
         # пользователь пытается удалить данные другого пользователя, но у него недостаточно прав
-        data = {
-            'id': buyer_user.id,
-            'data_to_delete': ['phone_number']
-        }
-        response = authenticated_seller_client.delete(self.url, data, format='json')
+        response = authenticated_seller_client.delete(f"{self.url}?id={buyer_user.id}&data_to_delete=phone_number", format='json')
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert 'Недостаточно прав' in response.data['message']
 
     def test_delete_user_data_by_id_not_found(self, authenticated_admin_client):
         # пользователь пытается удалить данные несуществующего пользователя
-        data = {
-            'id': 999,
-            'data_to_delete': ['phone_number']
-        }
-        response = authenticated_admin_client.delete(self.url, data, format='json')
+        response = authenticated_admin_client.delete(f"{self.url}?id=999&data_to_delete=phone_number", format='json')
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert 'Пользователь не найден' in response.data['message']
 
     def test_delete_user_data_unauthenticated(self, api_client):
         # не аутентифицированный пользователь пытается удалить данные
-        data = {
-            'data_to_delete': ['phone_number']
-        }
-        response = api_client.delete(self.url, data, format='json')
+        response = api_client.delete(f"{self.url}?data_to_delete=phone_number", format='json')
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert 'Пользователь не аутентифицирован' in response.data['message']
 

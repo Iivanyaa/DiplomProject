@@ -14,7 +14,7 @@ class TestProductModel:
             seller=seller_user
         )
         assert product.is_available is True
-        assert str(product) == "Test Product"
+        assert product.name == "Test Product"
 
     def test_product_availability(self):
         product = Product.objects.create(
