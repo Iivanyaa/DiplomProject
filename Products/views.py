@@ -579,7 +579,7 @@ class ProductImportView(APIView):
 
             if existing_product:
                 # Если продукт существует, обновляем его
-                serializer = ProductSerializer(existing_product, data=item_data, partial=True)
+                serializer = AddProductImportSerializer(existing_product, data=item_data, partial=True)
                 if serializer.is_valid():
                     serializer.save()
                     updated_products_count += 1
@@ -587,7 +587,7 @@ class ProductImportView(APIView):
                     errors.append({"item": item_data_raw, "error": serializer.errors})
             else:
                 # Если продукт не существует, создаем новый
-                serializer = ProductSerializer(data=item_data)
+                serializer = AddProductImportSerializer(data=item_data)
                 if serializer.is_valid():
                     serializer.save()
                     imported_products_count += 1

@@ -110,6 +110,14 @@ class ProductSerializer(serializers.ModelSerializer):
 
         return instance
 
+class AddProductImportSerializer(ProductSerializer):
+     # Поле для категорий, принимающее список строк (названий категорий)
+    categories = serializers.ListField(
+        child=serializers.CharField(max_length=255),
+        write_only=True,
+        required=False
+    )
+
 
 class ProductChangeAvailabilitySerializer(serializers.Serializer):
     id = serializers.IntegerField(required=False, allow_null=True)
@@ -328,5 +336,6 @@ __all__ = [
     'ParameterSerializer',
     'ProductImportSerializer',
     'ProductImportErrorSerializer',
-    'ProductImportSuccessSerializer'
+    'ProductImportSuccessSerializer',
+    'AddProductImportSerializer'
 ]
