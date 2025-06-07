@@ -146,5 +146,5 @@ DiplomProject
 
 Если у вас есть вопросы или предложения, свяжитесь со мной:
 
-* **GitHub:** \[https://github.com/Iivanyaa\]  
+* **GitHub:** \[https://github.com/Iivanyaa/\]  
 * **Email:** \[Kozmaivan2013@gmail.com\]
