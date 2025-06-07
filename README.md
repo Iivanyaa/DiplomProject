@@ -2,8 +2,6 @@
 
 \!
 
-[Изображение: Retail Network Automation](https://www.redhat.com/rhdc/managed-files/ansible/9nKqwrsxJHbOCGI-L1x4WgGM2Jr3r-rd-d5IgHkbXsm9x9wPI3fBMxj4UJHz0wpzLnRN7nZatwsSpQ2J2JeyogUSR0ecV78V2v1N0AkWOn00NGgxZ1ab1o1aNz54W6HjbNvsPWma.png)
-
 ## **Описание проекта**
 
 Данный проект представляет собой **backend-приприложение для автоматизации закупок в розничной сети**, разработанное в рамках дипломной работы по профессии «Python-разработчик: расширенный курс». Приложение предоставляет REST API для управления заказами, товарами и прайс-листами поставщиков.
