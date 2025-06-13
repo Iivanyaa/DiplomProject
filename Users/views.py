@@ -6,6 +6,8 @@ from rest_framework.views import APIView
 from .serializers import *
 from .models import MarketUser, UserGroup, Contact
 from django.contrib.auth import authenticate
+from social_core.exceptions import AuthException, MissingBackend
+from social_django.utils import load_strategy, load_backend
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.mail import send_mail
 from .utils import generate_secure_password
@@ -475,4 +477,75 @@ class AddContactView(APIView):
         contacts = user.contacts.all()
         return Response({'contacts': AddContactSerializer(contacts, many=True).data}, status=status.HTTP_200_OK)
     
-    
+# вьюшка для аутентификации через социальные сети
+   class SocialLoginView(APIView):
+    """
+    API View для аутентификации через социальные сети.
+
+    Принимает POST-запрос с параметрами:
+    - `provider`: имя бэкенда ('google-oauth2', 'vk-oauth2' и т.д.)
+    - `access_token`: токен доступа, полученный от социальной сети на клиенте
+
+    В случае успеха возвращает JWT access и refresh токены вашего приложения.
+    """
+
+    def post(self, request, *args, **kwargs):
+        provider = request.data.get('provider')
+        access_token = request.data.get('access_token')
+
+        if not provider or not access_token:
+            return Response(
+                {'error': 'Поля "provider" и "access_token" обязательны.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # DRF-запрос не содержит "стратегию" по умолчанию, загрузим ее
+        strategy = load_strategy(request)
+
+        try:
+            # Загружаем бэкенд для указанного провайдера
+            backend = load_backend(strategy=strategy, name=provider, redirect_uri=None)
+        except MissingBackend:
+            return Response(
+                {'error': f'Бэкенд для провайдера "{provider}" не найден.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Выполняем аутентификацию. Библиотека сама сходит в API соцсети,
+            # проверит токен и вернет или создаст пользователя Django.
+            user = backend.do_auth(access_token)
+        except AuthException as e:
+            return Response(
+                {'error': 'Ошибка аутентификации.', 'details': str(e)},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        except Exception as e:
+             return Response(
+                {'error': 'Произошла непредвиденная ошибка.', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        if user:
+            if user.is_active:
+                # Если пользователь существует и активен, генерируем для него JWT-токены
+                refresh = RefreshToken.for_user(user)
+                return Response({
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                    'user': { # Можно вернуть и базовую информацию о пользователе
+                        'id': user.id,
+                        'username': user.username,
+                        'email': user.email,
+                    }
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response(
+                    {'error': 'Аккаунт пользователя неактивен.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        else:
+            return Response(
+                {'error': 'Ошибка аутентификации. Пользователь не найден.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )

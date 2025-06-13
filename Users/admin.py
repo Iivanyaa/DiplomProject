@@ -3,6 +3,5 @@ from .models import MarketUser, Contact, UserGroup
 
 admin.site.register(MarketUser)
 admin.site.register(Contact)
-admin.site.register(UserGroup)/\
-
+admin.site.register(UserGroup)
 
