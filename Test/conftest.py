@@ -3,6 +3,7 @@ from django.contrib.auth.models import Group, Permission
 from Orders.models import Order, OrderProduct, SellerOrder
 from Products.models import Product, Category, Cart, CartProduct
 from Users.models import MarketUser, UserGroup
+from django.core.cache import cache
 
 @pytest.fixture
 def buyer_group(db):
@@ -146,6 +147,16 @@ def product_another_seller(another_seller_user):
         seller=another_seller_user
     )
     return product
+
+
+@pytest.fixture
+def clear_cache_before_each_test():
+    """
+    Фикстура для автоматической очистки кэша перед каждым тестом.
+    autouse=True означает, что она будет применяться ко всем тестам в модуле/сессии.
+    """
+    cache.clear()
+
 
 
 __all__ = [

@@ -6,6 +6,7 @@ from Test.Users.conftest import *
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from Users.serializers import *
+from django.core.cache import cache
 
 from django.contrib.auth.models import Permission
 
@@ -525,3 +526,33 @@ class TestAddContactView:
         response = authenticated_buyer_client.get(self.url, {'id': 9999})
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert 'Контакт не найден' in response.data['message']
+
+ 
+@pytest.mark.django_db
+class TestThrottling:
+    # URL для AddContactView
+    url = reverse('Get_User') # Замените 'contacts' на фактическое имя вашего URL-адреса
+    def test_get_user_data_throttling_authenticated(self, authenticated_buyer_client):
+        cache.clear()
+        url = reverse('Get_User')
+        for _ in range(160):
+            response = authenticated_buyer_client.get(url)
+            print(f"запрос {_} Status code: {response.status_code}")
+            print(response.status_code)
+            if _ < 150:
+                assert response.status_code == status.HTTP_200_OK
+            else:
+                assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+    def test_get_user_data_throttling_unauthenticated(self, api_client):
+        cache.clear()
+        url = reverse('Get_User')
+        for _ in range(121):
+            response = api_client.get(url)
+            print(f"запрос {_} Status code: {response.status_code}")
+            print(response.status_code)
+            if _ < 120:
+                assert response.status_code == status.HTTP_401_UNAUTHORIZED
+            else:
+                assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+

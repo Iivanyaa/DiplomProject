@@ -320,21 +320,23 @@ class GetUserDataView(APIView):
             если пользователь не аутентифицирован, не имеет прав, или
             пользователь не найден.
         """
-        print(request.query_params)
+        # print(request.query_params)
         serializer = GetUserDataSerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
-        print(serializer.validated_data)
-        print(serializer.is_valid())
+        # print(serializer.validated_data)
+        # print(serializer.is_valid())
         # получаем ID пользователя из запроса, если он не указан, то используем ID из сессии
         user_id = serializer.validated_data.get('id') or request.session.get('user_id')
-        print(user_id, request.session.get('user_id'))
-        print(request.session.get('user_id'))
-        print(request.session)
+        # print(user_id, request.session.get('user_id'))
+        # print(request.session.get('user_id'))
+        # print(request.session)
         # проверяем наличия прав на получение данных другого пользователя
         if request.session.get('user_id') is None or user_id != request.session.get('user_id') and not MarketUser.AccessCheck(self, request=request, perm=perm):
+            print('проверку прав на получение данных другого пользователя не прошли')
             return Response({'message': 'Недостаточно прав'}, status=status.HTTP_401_UNAUTHORIZED , content_type='application/json')
         # проверяем наличие пользователя
         if not MarketUser.objects.filter(id=user_id).exists():
+            print('пользователь не нашелся')
             return Response({'message': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
 
         # Получаем объект пользователя по ID
