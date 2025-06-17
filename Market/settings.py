@@ -34,6 +34,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'baton',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -48,7 +49,8 @@ INSTALLED_APPS = [
     # 'rest_framework_simplejwt',
     'Orders',
     'Users',
-    'Products'
+    'Products',
+    'baton.autodiscover'
 ]
 
 MIDDLEWARE = [
