@@ -478,74 +478,61 @@ class AddContactView(APIView):
         return Response({'contacts': AddContactSerializer(contacts, many=True).data}, status=status.HTTP_200_OK)
     
 # вьюшка для аутентификации через социальные сети
-   class SocialLoginView(APIView):
+@social_auth_schema
+class SocialAuthView(APIView):
     """
-    API View для аутентификации через социальные сети.
-
-    Принимает POST-запрос с параметрами:
-    - `provider`: имя бэкенда ('google-oauth2', 'vk-oauth2' и т.д.)
-    - `access_token`: токен доступа, полученный от социальной сети на клиенте
-
-    В случае успеха возвращает JWT access и refresh токены вашего приложения.
+    Представление для аутентификации через социальные сети.
+    Принимает `backend` (например, 'vk-oauth2', 'google-oauth2')
+    и `code` (код авторизации) от клиента.
     """
+    def post(self, request):
+        serializer = SocialAuthSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-    def post(self, request, *args, **kwargs):
-        provider = request.data.get('provider')
-        access_token = request.data.get('access_token')
-
-        if not provider or not access_token:
-            return Response(
-                {'error': 'Поля "provider" и "access_token" обязательны.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # DRF-запрос не содержит "стратегию" по умолчанию, загрузим ее
-        strategy = load_strategy(request)
+        backend_name = serializer.validated_data['backend']
+        code = serializer.validated_data['code']
 
         try:
-            # Загружаем бэкенд для указанного провайдера
-            backend = load_backend(strategy=strategy, name=provider, redirect_uri=None)
+            # Загружаем стратегию и бэкенд, используя оригинальный объект запроса Django.
+            # python-social-auth ожидает django.http.HttpRequest, поэтому мы обращаемся к _request.
+            strategy = load_strategy(request._request)
+            backend = load_backend(strategy, backend_name)
+
+            # Пытаемся завершить процесс аутентификации.
+            # Это обменяет код на токен доступа и создаст/обновит пользователя.
+            user = backend.do_auth(code)
+
+            if user:
+                # Если аутентификация успешна, устанавливаем пользователя в сессии.
+                request.session['user_id'] = user.id
+                request.session['username'] = user.username
+                return Response(
+                    {
+                        'message': 'Успешная аутентификация',
+                        'user': UserSerializer(user).data # Возвращаем данные пользователя
+                    },
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {'message': 'Аутентификация не удалась'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         except MissingBackend:
             return Response(
-                {'error': f'Бэкенд для провайдера "{provider}" не найден.'},
+                {'message': f'Бэкенд "{backend_name}" не найден или не сконфигурирован'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        try:
-            # Выполняем аутентификацию. Библиотека сама сходит в API соцсети,
-            # проверит токен и вернет или создаст пользователя Django.
-            user = backend.do_auth(access_token)
         except AuthException as e:
             return Response(
-                {'error': 'Ошибка аутентификации.', 'details': str(e)},
+                {'message': f'Ошибка аутентификации через социальную сеть: {e}'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
         except Exception as e:
-             return Response(
-                {'error': 'Произошла непредвиденная ошибка.', 'details': str(e)},
+            # Ловим любые другие неожиданные ошибки
+            return Response(
+                {'message': f'Произошла внутренняя ошибка сервера: {e}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        if user:
-            if user.is_active:
-                # Если пользователь существует и активен, генерируем для него JWT-токены
-                refresh = RefreshToken.for_user(user)
-                return Response({
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                    'user': { # Можно вернуть и базовую информацию о пользователе
-                        'id': user.id,
-                        'username': user.username,
-                        'email': user.email,
-                    }
-                }, status=status.HTTP_200_OK)
-            else:
-                return Response(
-                    {'error': 'Аккаунт пользователя неактивен.'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-        else:
-            return Response(
-                {'error': 'Ошибка аутентификации. Пользователь не найден.'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )

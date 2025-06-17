@@ -285,7 +285,26 @@ class GetContactSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'id': {'required': False, 'allow_null': True},
         }
-    
+
+
+class SocialAuthSerializer(serializers.Serializer):
+    """
+    Сериализатор для аутентификации через социальные сети.
+    Ожидает название бэкенда (например, 'vk-oauth2', 'google-oauth2')
+    и код авторизации, полученный от социальной сети.
+    """
+    backend = serializers.CharField(max_length=50, help_text="Название бэкенда социальной сети (например, 'vk-oauth2', 'google-oauth2').")
+    code = serializers.CharField(help_text="Код авторизации, полученный от социальной сети.")
+
+    # Можно добавить валидацию для backend, чтобы убедиться, что он из списка разрешенных
+    def validate_backend(self, value):
+        allowed_backends = ['vk-oauth2', 'google-oauth2'] # Добавь другие, если нужны
+        if value not in allowed_backends:
+            raise serializers.ValidationError(f"Неизвестный или неподдерживаемый бэкенд: {value}. Разрешены: {', '.join(allowed_backends)}")
+        return value
+
+
+
 
 
 __all__ = [
@@ -302,7 +321,8 @@ __all__ = [
     'DeleteUserSerializer',
     'UpdateContactSerializer',
     'DeleteContactSerializer',
-    'GetContactSerializer'
+    'GetContactSerializer',
+    'SocialAuthSerializer'
 ]
 
 # class SellerSerializer(serializers.ModelSerializer):

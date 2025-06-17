@@ -636,7 +636,38 @@ contact_schema = extend_schema_view(
         ]
     ),
 )
-        
+
+social_auth_schema = extend_schema(
+    request=SocialAuthSerializer,
+    responses={
+        200: OpenApiResponse(description='Аутентификация через социальную сеть успешна',
+                             examples=[OpenApiExample('Успех аутентификации',
+                                                      value={
+                                                          'message': 'Успешная аутентификация',
+                                                          'user': {
+                                                              'id': 1,
+                                                              'username': 'social_user',
+                                                              'email': 'social@example.com',
+                                                              'first_name': 'Имя',
+                                                              'last_name': 'Фамилия'
+                                                          }
+                                                      },
+                                                      media_type='application/json')
+                                     ],
+                            ),
+        400: OpenApiResponse(description='Неверные данные запроса или бэкенд не найден',
+                             examples=[OpenApiExample('Неверные данные', value={'message': 'Неверные данные', 'errors': {'code': ['This field is required.']}}),
+                                       OpenApiExample('Бэкенд не найден', value={'message': 'Бэкенд "unknown-backend" не найден или не сконфигурирован'})
+                                      ]),
+        401: OpenApiResponse(description='Ошибка аутентификации через социальную сеть',
+                             examples=[OpenApiExample('Ошибка аутентификации', value={'message': 'Ошибка аутентификации через социальную сеть: Authentication failed: ...'})]),
+        500: OpenApiResponse(description='Внутренняя ошибка сервера',
+                             examples=[OpenApiExample('Внутренняя ошибка', value={'message': 'Произошла внутренняя ошибка сервера: ...'})]),
+    },
+    summary='Аутентификация через социальные сети (VK, Google)',
+    description='Выполняет аутентификацию пользователя через VK.com или Google, используя код авторизации, полученный от клиента. В случае успеха возвращает данные пользователя и устанавливает сессию.',
+    tags=['Пользователи']
+)     
 
 __all__ = [
     'get_user_data_schema',
@@ -648,5 +679,6 @@ __all__ = [
     'delete_user_schema',
     'user_login_schema',
     'user_logout_schema',
-    'contact_schema'
+    'contact_schema',
+    'social_auth_schema'
 ]
