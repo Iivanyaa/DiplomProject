@@ -13,5 +13,5 @@ urlpatterns = [
     path('Users/', views.GetUserDataView.as_view(), name='Get_User'),
     path('restore_password/', views.RestorePasswordView.as_view(), name='restore_password'),
     path('Users/Contacts/', views.AddContactView.as_view(), name='contacts'),
-    path('login/social/', SocialAuthView.as_view(), name='social_auth'),
+    path('login/social/', views.SocialAuthView.as_view(), name='social_auth'),
 ] 
