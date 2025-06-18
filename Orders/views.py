@@ -14,6 +14,8 @@ from Orders.serializers import OrderProductSerializer, OrderSearchSerializer, Or
 from Users.models import MarketUser
 from rest_framework import status
 from Orders.schema import order_list_schema
+from django.http import HttpResponse
+from  rest_framework.decorators import api_view
 
 
 @order_list_schema
@@ -100,4 +102,10 @@ class OrderView(APIView):
         return Response({'message': 'Статус заказа успешно изменен',
                          'order_product': order_product.id,
                          'status': order_product.status}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def trigger_error(request):
+    result = 1 / 0
+    return Response("This will never be seen.", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

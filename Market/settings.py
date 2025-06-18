@@ -15,6 +15,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -55,6 +56,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'rollbar.contrib.django.middleware.RollbarNotifierMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -149,8 +151,9 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle'
+        'rest_framework.throttling.UserRateThrottle',
     ],
+    'EXCEPTION_HANDLER': 'rollbar.contrib.django_rest_framework.post_exception_handler',
     'DEFAULT_THROTTLE_RATES': {
         'anon': '120/hour',
         'user': '1000/day',
@@ -194,4 +197,18 @@ SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.user.user_details'
 )
 
+ROLLBAR = {
+    'access_token': os.getenv('ROLLBAR_ACCESS_TOKEN'),
+    'environment': 'testenv' if DEBUG else 'production', # Разделяем ошибки по окружениям
+    'code_version': '1.0', # Укажите версию вашего кода
+    'root': BASE_DIR, # Корневая директория проекта
+    'person_fn': lambda request: {
+        'id': request.user.id,
+        'username': request.user.username,
+        'email': request.user.email
+    } if request.user.is_authenticated else None,
+}
+
+DEBUG = False
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 #AUTH_USER_MODEL = 'Users.MarketUser'
