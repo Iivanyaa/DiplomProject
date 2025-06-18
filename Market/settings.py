@@ -52,8 +52,13 @@ INSTALLED_APPS = [
     'Users',
     'Products',
     'baton.autodiscover',
-    'silk'
+    'silk',
+    'cachalot'
 ]
+
+STATIC_URL = '/static/'
+
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
 MIDDLEWARE = [
     'rollbar.contrib.django.middleware.RollbarNotifierMiddleware',
@@ -209,6 +214,16 @@ ROLLBAR = {
     } if request.user.is_authenticated else None,
 }
 
-DEBUG = False
+DEBUG = True
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    },
+}
+
+CACHALOT_CACHE = 'default' # Или название вашего кэша Redis
+CACHALOT_ENABLED = True # Включить cachalot
 #AUTH_USER_MODEL = 'Users.MarketUser'
