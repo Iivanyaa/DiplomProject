@@ -1,5 +1,6 @@
 from django.db import models
 from Users.models import MarketUser
+from easy_thumbnails.fields import ThumbnailerImageField
 
 
 # модель продукта
@@ -33,6 +34,7 @@ class Product(models.Model):
    
     seller = models.ForeignKey('Users.MarketUser', on_delete=models.CASCADE, null=True, related_name='products', verbose_name="Продавец")
 
+
     class Meta:
         verbose_name = "Продукт"
         verbose_name_plural = "Продукты"
@@ -40,6 +42,7 @@ class Product(models.Model):
         # Уникальность (name, seller) позволяет идентифицировать продукт для обновления
         # без поля SKU, которое отсутствует в вашей модели.
         unique_together = ('name', 'seller')
+
 
     def save(self, *args, **kwargs):
         """
@@ -56,6 +59,38 @@ class Product(models.Model):
         """
         seller_name = self.seller.username if self.seller else 'Неизвестный продавец'
         return f"{self.name} ({seller_name})"
+
+
+class ProductImage(models.Model):
+    """
+    Модель для хранения изображений продукта.
+    """
+    # Связь с моделью Product
+    product = models.ForeignKey(
+        'Product', # Ссылка на модель 'Product' (в этом же приложении)
+        related_name='images', # Название обратной связи для доступа к изображениям из объекта Product
+        on_delete=models.CASCADE, # При удалении продукта удалять все его изображения
+        help_text="Продукт, к которому относится изображение."
+    )
+    # Поле для хранения файла изображения, использующее easy-thumbnails
+    image = ThumbnailerImageField(
+        upload_to='product_images/', # Директория для загрузки изображений
+        blank=True,
+        null=True,
+        help_text="Файл изображения продукта."
+    )
+    created_at = models.DateTimeField(auto_now_add=True) # Дата и время создания
+    updated_at = models.DateTimeField(auto_now=True) # Дата и время последнего обновления
+
+    class Meta:
+        verbose_name = "Изображение продукта"
+        verbose_name_plural = "Изображения продуктов"
+        # Можно добавить дополнительные ограничения, например, уникальность, порядок и т.д.
+
+    def __str__(self):
+        # Строковое представление объекта, полезно для админ-панели
+        return f"Изображение для {self.product.name} (ID: {self.id})"
+
     
 
 # модель параметра продукта

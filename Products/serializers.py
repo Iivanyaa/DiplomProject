@@ -315,6 +315,30 @@ class ProductImportSuccessSerializer(serializers.Serializer):
     imported_count = serializers.IntegerField(required=True)
     updated_count = serializers.IntegerField(required=True)
 
+class ProductImageSerializer(serializers.Serializer):
+    """
+    Сериализатор для загрузки изображения продукта.
+    Ожидает product_id и файл изображения.
+    """
+    product_id = serializers.IntegerField(help_text="ID продукта, к которому принадлежит изображение.")
+    image = serializers.ImageField(help_text="Файл изображения продукта.")
+
+class ProductImageDeleteSerializer(serializers.Serializer):
+    """
+    Сериализатор для удаления изображения продукта.
+    Требуется product_id и image_id для обеспечения корректного владения.
+    """
+    product_id = serializers.IntegerField(help_text="ID продукта, которому принадлежит удаляемое изображение.")
+    image_id = serializers.IntegerField(help_text="ID изображения продукта для удаления.")
+
+class ProductImageGetSerializer(serializers.Serializer):
+    """
+    Сериализатор для получения URL-ов изображений продукта.
+    Требуется product_id.
+    """
+    product_id = serializers.IntegerField(help_text="ID продукта, изображения которого нужно получить.")
+
+
 
 __all__ = [
     'ProductSerializer',
@@ -337,5 +361,8 @@ __all__ = [
     'ProductImportSerializer',
     'ProductImportErrorSerializer',
     'ProductImportSuccessSerializer',
-    'AddProductImportSerializer'
+    'AddProductImportSerializer',
+    'ProductImageSerializer',
+    'ProductImageDeleteSerializer',
+    'ProductImageGetSerializer',
 ]

@@ -7,7 +7,7 @@ from Orders.models import Order, OrderProduct
 from Users.models import MarketUser
 from Users.serializers import UserSerializer, ViewUsernameSerializer
 from .serializers import *
-from .models import Product, Category, Cart, CartProduct, Parameters
+from .models import Product, Category, Cart, CartProduct, Parameters, ProductImage
 from rest_framework import status, serializers
 from django.core.mail import send_mail
 import os
@@ -15,6 +15,8 @@ from .schema import *
 import yaml
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from easy_thumbnails.files import get_thumbnailer # Импорт get_thumbnailer
+from .tasks import process_product_image # Импорт задач Celery
 
 # Документация для ProductsView
 @products_list_schema
@@ -910,3 +912,185 @@ class CartView(APIView):
                          "order_products": [order_product.product.name for order_product in order.order_products.all()]
                          }, status=status.HTTP_201_CREATED)
 
+# Вьюшка для работы с изображениями продуктов
+class ProductImageView(APIView):
+    """
+    Представление для загрузки, получения и удаления изображений продукта.
+    """
+    parser_classes = (MultiPartParser, FormParser) # Разрешает загрузку файлов для POST запросов
+
+    @extend_schema(
+        tags=["Изображения продуктов"],
+        summary="Загрузить или обновить изображение продукта",
+        request=ProductImageSerializer,
+        responses={
+            202: OpenApiResponse(description="Изображение принято на обработку."),
+            400: OpenApiResponse(description="Неверный формат запроса или продукт не существует."),
+            401: OpenApiResponse(description="Пользователь не аутентифицирован."),
+            403: OpenApiResponse(description="Недостаточно прав."),
+        }
+    )
+    def post(self, request, perm='Users.add_product_image'):
+        """
+        POST-запрос для загрузки изображения продукта.
+        Принимает multipart/form-data с полями 'product_id' и 'image'.
+        """
+        user_id = request.session.get('user_id')
+        if not user_id:
+            return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
+        print('Пользователь аутентифицирован')
+        # Проверка прав: только продавец, владеющий продуктом, может загружать изображения
+        # или пользователь с правом 'Users.add_product_image'.
+        if not MarketUser.AccessCheck(self, request, perm):
+            print('Недостаточно прав для добавления изображений продукта')
+            print(perm)
+            print(MarketUser.AccessCheck(self, request, perm))    
+            return Response({'message': 'Недостаточно прав для добавления изображений продукта'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = ProductImageSerializer(data=request.data)
+        if serializer.is_valid():
+            product_id = serializer.validated_data['product_id']
+            image_file = serializer.validated_data['image']
+
+            try:
+                product = Product.objects.get(id=product_id)
+                # Дополнительная проверка: убедиться, что текущий пользователь является продавцом этого продукта.
+                # Это предотвращает загрузку изображений к чужим продуктам.
+                if product.seller.id != user_id:
+                    return Response({'message': 'Вы не являетесь владельцем этого продукта'}, status=status.HTTP_403_FORBIDDEN)
+            except Product.DoesNotExist:
+                return Response({'message': 'Продукт не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Создаем новую запись изображения продукта в базе данных
+            product_image = ProductImage.objects.create(product=product, image=image_file)
+
+            # Запускаем асинхронную задачу для генерации миниатюр
+            process_product_image.delay(product_image.id)
+
+            return Response({'message': 'Изображение продукта принято на обработку', 'image_id': product_image.id}, status=status.HTTP_202_ACCEPTED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        tags=["Изображения продуктов"],
+        summary="Получить URL-ы изображений продукта и их миниатюр",
+        parameters=[
+            OpenApiParameter(name='product_id', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY,
+                             description='ID продукта, для которого нужно получить изображения.', required=True)
+        ],
+        responses={
+            200: OpenApiResponse(description="URL-ы изображений продукта и их миниатюр.",
+                                 examples=[OpenApiExample(
+                                     'Пример 1',
+                                     value={
+                                         'images': [
+                                             {'id': 1, 'original': '/media/product_images/prod_1_img_1.jpg', 'small': '/media/CACHE/images/prod_1_img_1.jpg/abc12d3e/.../small.jpg'},
+                                             {'id': 2, 'original': '/media/product_images/prod_1_img_2.jpg', 'medium': '/media/CACHE/images/prod_1_img_2.jpg/xyz98w7v/.../medium.jpg'}
+                                         ]
+                                     }
+                                 )]),
+            400: OpenApiResponse(description="Неверный формат запроса."),
+            401: OpenApiResponse(description="Пользователь не аутентифицирован."),
+            404: OpenApiResponse(description="Продукт или изображения не найдены."),
+        }
+    )
+    def get(self, request):
+        """
+        GET-запрос для получения URL-ов изображений продукта и их миниатюр.
+        """
+        user_id = request.session.get('user_id')
+        if not user_id:
+            return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        serializer = ProductImageGetSerializer(data=request.query_params)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        product_id = serializer.validated_data['product_id']
+
+        try:
+            product = Product.objects.get(id=product_id)
+            # Если просмотр изображений должен быть ограничен определенными пользователями,
+            # добавьте здесь проверку прав, например:
+            # if not MarketUser.AccessCheck(self, request, 'Users.view_product_images'):
+            #     return Response({'message': 'Недостаточно прав для просмотра изображений'}, status=status.HTTP_403_FORBIDDEN)
+        except Product.DoesNotExist:
+            return Response({'message': 'Продукт не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+        product_images = ProductImage.objects.filter(product=product)
+        if not product_images.exists():
+            return Response({'message': 'Изображения для данного продукта не найдены'}, status=status.HTTP_404_NOT_FOUND)
+
+        response_images = []
+        for p_image in product_images:
+            if p_image.image:
+                thumbnailer = get_thumbnailer(p_image.image)
+                image_data = {
+                    'id': p_image.id,
+                    'original': p_image.image.url,
+                    'small': thumbnailer.get_thumbnail({'size': (100, 100), 'crop': True}).url,
+                    'medium': thumbnailer.get_thumbnail({'size': (300, 300), 'crop': True}).url
+                }
+                response_images.append(image_data)
+
+        if not response_images:
+            return Response({'message': 'Для данного продукта нет доступных изображений'}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({'images': response_images}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        tags=["Изображения продуктов"],
+        summary="Удалить изображение продукта",
+        parameters=[
+            OpenApiParameter(name='image_id', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY,
+                             description='ID изображения продукта, которое нужно удалить.', required=True),
+            OpenApiParameter(name='product_id', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY,
+                             description='ID продукта, у которого нужно удалить изображение.', required=False),
+        ],
+        responses={
+            200: OpenApiResponse(description="Изображение продукта успешно удалено."),
+            400: OpenApiResponse(description="Неверный формат запроса."),
+            401: OpenApiResponse(description="Пользователь не аутентифицирован."),
+            403: OpenApiResponse(description="Недостаточно прав."),
+            404: OpenApiResponse(description="Продукт или изображение не найдены."),
+        }
+    )
+    def delete(self, request):
+        """
+        DELETE-запрос для удаления изображения продукта.
+        """
+        user_id = request.session.get('user_id')
+        if not user_id:
+            return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Проверка прав: только продавец, владеющий продуктом, может удалять изображения
+        # или пользователь с правом 'Users.delete_product_image'.
+        if not MarketUser.AccessCheck(self, request, 'Users.delete_product_image'):
+             return Response({'message': 'Недостаточно прав для удаления изображений продукта'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = ProductImageDeleteSerializer(data=request.query_params)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        product_id = serializer.validated_data['product_id']
+        image_id = serializer.validated_data['image_id']
+
+        try:
+            product = Product.objects.get(id=product_id)
+            # Убедиться, что текущий пользователь является продавцом продукта,
+            # изображение которого пытается удалить.
+            if product.seller.id != user_id:
+                return Response({'message': 'Вы не являетесь владельцем этого продукта'}, status=status.HTTP_403_FORBIDDEN)
+        except Product.DoesNotExist:
+            return Response({'message': 'Продукт не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            # Ищем изображение, принадлежащее указанному продукту
+            product_image = ProductImage.objects.get(id=image_id, product=product)
+            # Удаляем файл изображения из хранилища (если настроено)
+            product_image.image.delete(save=False) # save=False, чтобы не пытаться сохранить объект без файла
+            # Удаляем запись об изображении из базы данных
+            product_image.delete()
+            return Response({'message': 'Изображение продукта успешно удалено'}, status=status.HTTP_200_OK)
+        except ProductImage.DoesNotExist:
+            return Response({'message': 'Изображение продукта не найдено или не принадлежит данному продукту'}, status=status.HTTP_404_NOT_FOUND)

@@ -22,13 +22,15 @@ def create_initial_groups(sender, **kwargs):
                             'view_user', 'update_user', 'delete_user_data',
                             'get_user_data', 'change_password', 'delete_product',
                             'create_category', 'delete_category', 'update_category',
-                            'get_category', 'view_orders', 'update_order_status', 'delete_self'
+                            'get_category', 'view_orders', 'update_order_status', 'delete_self',
+                            'add_product_image', 'change_product_image', 'delete_product_image',
                             ]
     # права продавца
     seller_permissions = [  'add_product', 'change_good', 'delete_good', 'view_good',
                             'change_password', 'get_category', 'view_orders', 'update_order_status',
                             'update_product', 'delete_product', 'change_product_availability',
-                            "delete_self", "delete_product_parameters", "add_product_parameters", "update_product_parameters"
+                            "delete_self", "delete_product_parameters", "add_product_parameters", "update_product_parameters",
+                            'add_product_image', 'change_product_image', 'delete_product_image',
                             ]
     # права покупателя  
     buyer_permissions = [
@@ -39,7 +41,7 @@ def create_initial_groups(sender, **kwargs):
                             'change_password', 'get_category',
                             'update_product_in_cart', 'delete_product_from_cart',
                             'order', 'view_orders', 'delete_self', 'add_contact',
-                            'change_contact', 'delete_contact', 'view_contact'
+                            'change_contact', 'delete_contact', 'view_contact',
                             ]
     
     content_type = ContentType.objects.get_for_model(UserGroup)
