@@ -4,6 +4,7 @@ from .models import MarketUser, Contact, UserGroup
 from django.contrib.auth.hashers import make_password
 
 
+
 class UserSerializer(serializers.ModelSerializer):
     # Добавляем поле user_type, которое используется только для записи,
     # но не является частью модели MarketUser
@@ -304,6 +305,11 @@ class SocialAuthSerializer(serializers.Serializer):
         return value
 
 
+class AvatarSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MarketUser
+        fields = ('avatar',)
+
 
 
 
@@ -322,7 +328,8 @@ __all__ = [
     'UpdateContactSerializer',
     'DeleteContactSerializer',
     'GetContactSerializer',
-    'SocialAuthSerializer'
+    'SocialAuthSerializer',
+    'AvatarSerializer'
 ]
 
 # class SellerSerializer(serializers.ModelSerializer):

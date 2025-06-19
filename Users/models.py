@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import Group, User
 from rest_framework.response import Response
 from rest_framework import status
+from easy_thumbnails.fields import ThumbnailerImageField
 
 
 class MarketUser(User):
@@ -22,6 +23,7 @@ class MarketUser(User):
         default='Buyer',  # по умолчанию - покупатель
         help_text='Тип пользователя. Seller - продавец, Buyer - покупатель, Admin - администратор. По умолчанию - покупатель'  
     )
+    avatar = ThumbnailerImageField(upload_to='avatars/', blank=True, null=True, help_text='Аватар пользователя', verbose_name='Аватар')
     
     def AccessCheck(self, request, perm: str):
         user_id = request.session.get('user_id')

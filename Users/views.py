@@ -12,6 +12,8 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.core.mail import send_mail
 from .utils import generate_secure_password
 from .schema import *
+from easy_thumbnails.files import get_thumbnailer
+from .tasks import process_avatar # Импортируем нашу новую задачу Celery
 
 
 # Регистрация покупателя по логину, почте и паролю
@@ -536,3 +538,112 @@ class SocialAuthView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+# ==== НОВЫЙ КЛАСС ДЛЯ РАБОТЫ С АВАТАРАМИ ====
+class AvatarUploadView(APIView):
+    """
+    Представление для загрузки, получения и удаления аватара пользователя.
+    """
+    @extend_schema(
+        tags=["Аватары пользователей"],
+        summary="Загрузить или обновить аватар",
+        request=AvatarSerializer,
+        responses={
+            202: OpenApiResponse(description="Аватар принят на обработку."),
+            400: OpenApiResponse(description="Неверный формат запроса."),
+            401: OpenApiResponse(description="Пользователь не аутентифицирован."),
+        }
+    )
+    def post(self, request):
+        """
+        POST-запрос для загрузки аватара.
+        Принимает multipart/form-data с полем 'avatar'.
+        """
+        user_id = request.session.get('user_id')
+        if not user_id:
+            return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        serializer = AvatarSerializer(data=request.data)
+        if serializer.is_valid():
+            user = MarketUser.objects.get(id=user_id)
+            # Сохраняем оригинальный аватар
+            user.avatar = serializer.validated_data['avatar']
+            user.save()
+            
+            # Запускаем асинхронную задачу для генерации миниатюр
+            process_avatar.delay(user.id)
+            
+            return Response({'message': 'Аватар принят на обработку'}, status=status.HTTP_202_ACCEPTED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        tags=["Аватары пользователей"],
+        summary="Получить URL аватара и его миниатюр",
+        responses={
+            200: OpenApiResponse(description="URL аватара и его миниатюр.",
+                examples=[OpenApiExample(
+                    'Example 1',
+                    value={
+                        'original': '/media/avatars/user_1.jpg',
+                        'thumbnail': '/media/CACHE/images/avatars/user_1.jpg/f0f4a7b7d2.../user_1.jpg'
+                    }
+                )]
+            ),
+            401: OpenApiResponse(description="Пользователь не аутентифицирован."),
+            404: OpenApiResponse(description="Аватар не найден."),
+        }
+    )
+    def get(self, request):
+        """
+        GET-запрос для получения URL аватара и его миниатюр.
+        """
+        user_id = request.session.get('user_id')
+        if not user_id:
+            return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            user = MarketUser.objects.get(id=user_id)
+            if not user.avatar:
+                 return Response({'message': 'Аватар не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+            thumbnailer = get_thumbnailer(user.avatar)
+            thumbnails = {
+                'original': user.avatar.url,
+                'small': thumbnailer.get_thumbnail({'size': (100, 100), 'crop': True}).url,
+                'medium': thumbnailer.get_thumbnail({'size': (300, 300), 'crop': True}).url
+            }
+            return Response(thumbnails, status=status.HTTP_200_OK)
+
+        except MarketUser.DoesNotExist:
+            return Response({'message': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+    @extend_schema(
+        tags=["Аватары пользователей"],
+        summary="Удалить аватар",
+        responses={
+            200: OpenApiResponse(description="Аватар успешно удален."),
+            401: OpenApiResponse(description="Пользователь не аутентифицирован."),
+            404: OpenApiResponse(description="Пользователь или аватар не найден."),
+        }
+    )
+    def delete(self, request):
+        """
+        DELETE-запрос для удаления аватара пользователя.
+        """
+        user_id = request.session.get('user_id')
+        if not user_id:
+            return Response({'message': 'Пользователь не аутентифицирован'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            user = MarketUser.objects.get(id=user_id)
+            if not user.avatar:
+                return Response({'message': 'У пользователя нет аватара для удаления'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Удаляем файл аватара и очищаем поле в модели
+            user.avatar.delete(save=True)
+            
+            return Response({'message': 'Аватар успешно удален'}, status=status.HTTP_200_OK)
+
+        except MarketUser.DoesNotExist:
+            return Response({'message': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)

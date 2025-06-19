@@ -53,12 +53,28 @@ INSTALLED_APPS = [
     'Products',
     'baton.autodiscover',
     'silk',
-    'cachalot'
+    'cachalot',
+    'easy_thumbnails',
 ]
 
 STATIC_URL = '/static/'
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+
+# Настройки Celery
+CELERY_BROKER_URL = 'redis://localhost:6379/0' # URL для Redis
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+
+# Настройки easy-thumbnails
+THUMBNAIL_ALIASES = {
+    '': {
+        'avatar': {'size': (100, 100), 'crop': True},
+        'avatar_medium': {'size': (300, 300), 'crop': True},
+    },
+}
 
 MIDDLEWARE = [
     'rollbar.contrib.django.middleware.RollbarNotifierMiddleware',
