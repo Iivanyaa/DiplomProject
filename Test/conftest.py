@@ -4,6 +4,16 @@ from Orders.models import Order, OrderProduct, SellerOrder
 from Products.models import Product, Category, Cart, CartProduct
 from Users.models import MarketUser, UserGroup
 from django.core.cache import cache
+from django.core.management import call_command
+
+
+@pytest.fixture(scope='session')
+def django_db_setup(django_db_blocker):
+    """
+    Фикстура для подготовки БД путем вызова management-команды перед началом сессии тестирования.
+    """
+    with django_db_blocker.unblock():
+        call_command('setup_permissions')
 
 @pytest.fixture
 def buyer_group(db):
